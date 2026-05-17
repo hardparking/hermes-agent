@@ -190,4 +190,4 @@ export {
   Zap
 }
 
-export type { LucideIcon } from 'lucide-react'
+export type { Icon as IconComponent } from '@tabler/icons-react'

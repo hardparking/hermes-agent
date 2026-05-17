@@ -216,7 +216,7 @@ export function ExternalLink({
 
   return (
     <a
-      className={cn('font-semibold text-foreground underline underline-offset-4 decoration-current', className)}
+      className={cn('font-semibold text-foreground underline underline-offset-4 decoration-current/20', className)}
       href={target}
       onClick={event => {
         event.stopPropagation()

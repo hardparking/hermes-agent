@@ -8,16 +8,16 @@ import {
   type DragEvent as ReactDragEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState
 } from 'react'
 
-import { formatRefValue, hermesDirectiveFormatter } from '@/components/assistant-ui/directive-text'
+import { hermesDirectiveFormatter } from '@/components/assistant-ui/directive-text'
 import { Button } from '@/components/ui/button'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useResizeObserver } from '@/hooks/use-resize-observer'
 import { chatMessageText } from '@/lib/chat-messages'
-import { contextPath } from '@/lib/chat-runtime'
 import { DATA_IMAGE_URL_RE } from '@/lib/embedded-images'
 import { triggerHaptic } from '@/lib/haptics'
 import { cn } from '@/lib/utils'
@@ -25,28 +25,39 @@ import {
   $composerAttachments,
   $composerDraft,
   clearComposerAttachments,
-  type ComposerAttachment
+  type ComposerAttachment,
+  reconcileComposerTerminalSelections
 } from '@/store/composer'
 import {
   $queuedPromptsBySession,
   enqueueQueuedPrompt,
-  removeQueuedPrompt,
   type QueuedPromptEntry,
+  removeQueuedPrompt,
   updateQueuedPrompt
 } from '@/store/composer-queue'
 import { $messages } from '@/store/session'
 import { $threadScrolledUp } from '@/store/thread-scroll'
 
-import { type DroppedFile, extractDroppedFiles, HERMES_PATHS_MIME } from '../hooks/use-composer-actions'
+import { extractDroppedFiles, HERMES_PATHS_MIME } from '../hooks/use-composer-actions'
 
 import { AttachmentList } from './attachments'
 import { ContextMenu } from './context-menu'
 import { ComposerControls } from './controls'
+import { COMPOSER_DROP_ACTIVE_CLASS, COMPOSER_DROP_FADE_CLASS } from './drop-affordance'
+import {
+  type ComposerInsertMode,
+  focusComposerInput,
+  markActiveComposer,
+  onComposerFocusRequest,
+  onComposerInsertRequest
+} from './focus'
 import { HelpHint } from './help-hint'
 import { useAtCompletions } from './hooks/use-at-completions'
 import { useSlashCompletions } from './hooks/use-slash-completions'
 import { useVoiceConversation } from './hooks/use-voice-conversation'
 import { useVoiceRecorder } from './hooks/use-voice-recorder'
+import { dragHasAttachments, droppedFileInlineRef, insertInlineRefsIntoEditor } from './inline-refs'
+import { QueuePanel } from './queue-panel'
 import {
   composerPlainText,
   placeCaretEnd,
@@ -54,7 +65,6 @@ import {
   renderComposerContents,
   RICH_INPUT_SLOT
 } from './rich-editor'
-import { QueuePanel } from './queue-panel'
 import { SkinSlashPopover } from './skin-slash-popover'
 import { detectTrigger, extractClipboardImageBlobs, textBeforeCaret, type TriggerState } from './text-utils'
 import { ComposerTriggerPopover } from './trigger-popover'
@@ -104,7 +114,11 @@ export function ChatBar({
   const queuedPromptsBySession = useStore($queuedPromptsBySession)
   const scrolledUp = useStore($threadScrolledUp)
   const activeQueueSessionKey = queueSessionKey || sessionId || null
-  const queuedPrompts = activeQueueSessionKey ? (queuedPromptsBySession[activeQueueSessionKey] ?? []) : []
+
+  const queuedPrompts = useMemo(
+    () => (activeQueueSessionKey ? (queuedPromptsBySession[activeQueueSessionKey] ?? []) : []),
+    [activeQueueSessionKey, queuedPromptsBySession]
+  )
 
   const composerRef = useRef<HTMLFormElement | null>(null)
   const composerSurfaceRef = useRef<HTMLDivElement | null>(null)
@@ -121,10 +135,11 @@ export function ChatBar({
   const [tight, setTight] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [queueEdit, setQueueEdit] = useState<QueueEditState | null>(null)
+  const [focusRequestId, setFocusRequestId] = useState(0)
   const dragDepthRef = useRef(0)
   const lastSpokenIdRef = useRef<string | null>(null)
 
-  const narrow = useMediaQuery('(max-width: 480px)')
+  const narrow = useMediaQuery('(max-width: 30rem)')
 
   const at = useAtCompletions({ gateway: gateway ?? null, sessionId: sessionId ?? null, cwd: cwd ?? null })
   const slash = useSlashCompletions({ gateway: gateway ?? null })
@@ -132,23 +147,81 @@ export function ChatBar({
   const stacked = expanded || narrow || tight
   const hasComposerPayload = draft.trim().length > 0 || attachments.length > 0
   const canSubmit = busy || hasComposerPayload
-  const editingQueuedPrompt = queueEdit ? queuedPrompts.find(entry => entry.id === queueEdit.entryId) ?? null : null
+  const editingQueuedPrompt = queueEdit ? (queuedPrompts.find(entry => entry.id === queueEdit.entryId) ?? null) : null
   const busyAction = busy && hasComposerPayload ? 'queue' : 'stop'
   const showHelpHint = draft === '?'
 
-  const placeholder = disabled ? 'Starting Hermes…' : 'Ask anything'
+  const placeholder = disabled ? 'Starting Hermes...' : 'Send follow-up'
 
-  const focusInput = () => window.requestAnimationFrame(() => editorRef.current?.focus({ preventScroll: true }))
+  const focusInput = useCallback(() => {
+    focusComposerInput(editorRef.current)
+    markActiveComposer('main')
+  }, [])
+
+  const requestMainFocus = useCallback(() => {
+    setFocusRequestId(id => id + 1)
+  }, [])
+
+  const appendExternalText = useCallback(
+    (text: string, mode: ComposerInsertMode) => {
+      const value = text.trim()
+
+      if (!value) {
+        return
+      }
+
+      const base = mode === 'inline' ? draftRef.current.trimEnd() : draftRef.current
+      const sep = mode === 'inline' ? (base ? ' ' : '') : base && !base.endsWith('\n') ? '\n\n' : ''
+      const next = `${base}${sep}${value}`
+
+      draftRef.current = next
+      aui.composer().setText(next)
+
+      const editor = editorRef.current
+
+      if (editor) {
+        renderComposerContents(editor, next)
+        placeCaretEnd(editor)
+      }
+
+      setFocusRequestId(id => id + 1)
+    },
+    [aui]
+  )
 
   useEffect(() => {
     if (!disabled) {
       focusInput()
     }
-  }, [disabled, focusKey])
+  }, [disabled, focusInput, focusKey, focusRequestId])
+
+  useEffect(() => {
+    if (disabled) {
+      return undefined
+    }
+
+    const offFocus = onComposerFocusRequest(target => {
+      if (target === 'main') {
+        setFocusRequestId(id => id + 1)
+      }
+    })
+
+    const offInsert = onComposerInsertRequest(({ mode, target, text }) => {
+      if (target === 'main') {
+        appendExternalText(text, mode)
+      }
+    })
+
+    return () => {
+      offFocus()
+      offInsert()
+    }
+  }, [appendExternalText, disabled])
 
   useEffect(() => {
     draftRef.current = draft
     $composerDraft.set(draft)
+    reconcileComposerTerminalSelections(draft)
 
     const editor = editorRef.current
 
@@ -232,114 +305,33 @@ export function ChatBar({
 
     draftRef.current = nextDraft
     aui.composer().setText(nextDraft)
-    focusInput()
+    requestMainFocus()
   }
 
   const insertInlineRefs = (refs: string[]) => {
     const editor = editorRef.current
 
-    if (!refs.length || !editor) {
+    if (!editor) {
       return false
     }
 
-    const inline = refs.join(' ')
-    const selection = window.getSelection()
+    const nextDraft = insertInlineRefsIntoEditor(editor, refs)
 
-    const range =
-      selection?.rangeCount && editor.contains(selection.getRangeAt(0).commonAncestorContainer)
-        ? selection.getRangeAt(0)
-        : null
-
-    editor.focus({ preventScroll: true })
-
-    if (range) {
-      const beforeRange = range.cloneRange()
-      beforeRange.selectNodeContents(editor)
-      beforeRange.setEnd(range.startContainer, range.startOffset)
-      const beforeContainer = document.createElement('div')
-      beforeContainer.appendChild(beforeRange.cloneContents())
-
-      const afterRange = range.cloneRange()
-      afterRange.selectNodeContents(editor)
-      afterRange.setStart(range.endContainer, range.endOffset)
-      const afterContainer = document.createElement('div')
-      afterContainer.appendChild(afterRange.cloneContents())
-
-      const beforeText = composerPlainText(beforeContainer)
-      const afterText = composerPlainText(afterContainer)
-      const needsBeforeSpace = beforeText.length > 0 && !/\s$/.test(beforeText)
-      const needsAfterSpace = afterText.length === 0 || !/^\s/.test(afterText)
-      range.deleteContents()
-      const fragment = document.createDocumentFragment()
-
-      if (needsBeforeSpace) {
-        fragment.appendChild(document.createTextNode(' '))
-      }
-
-      refs.forEach((ref, index) => {
-        const match = ref.match(/^@([^:]+):(.+)$/)
-        fragment.appendChild(match ? refChipElement(match[1], match[2]) : document.createTextNode(ref))
-
-        if (index < refs.length - 1) {
-          fragment.appendChild(document.createTextNode(' '))
-        }
-      })
-
-      const trailingSpace = needsAfterSpace ? document.createTextNode(' ') : null
-
-      if (trailingSpace) {
-        fragment.appendChild(trailingSpace)
-      }
-
-      range.insertNode(fragment)
-
-      const nextRange = document.createRange()
-
-      if (trailingSpace) {
-        nextRange.setStart(trailingSpace, trailingSpace.length)
-      } else {
-        nextRange.setStartAfter(fragment.lastChild || range.startContainer)
-      }
-
-      nextRange.collapse(true)
-      selection?.removeAllRanges()
-      selection?.addRange(nextRange)
-    } else {
-      const current = composerPlainText(editor)
-      renderComposerContents(editor, `${current}${current && !/\s$/.test(current) ? ' ' : ''}${inline} `)
-      placeCaretEnd(editor)
+    if (nextDraft === null) {
+      return false
     }
 
-    const nextDraft = composerPlainText(editor)
     draftRef.current = nextDraft
     aui.composer().setText(nextDraft)
+    requestMainFocus()
 
     return true
-  }
-
-  const droppedFileInlineRef = (candidate: DroppedFile) => {
-    if (!candidate.path) {
-      return null
-    }
-
-    const rel = contextPath(candidate.path, cwd || '')
-
-    if (candidate.line) {
-      const { line, lineEnd } = candidate
-      const range = lineEnd && lineEnd > line ? `${line}-${lineEnd}` : `${line}`
-
-      return `@line:${formatRefValue(`${rel}:${range}`)}`
-    }
-
-    const kind = candidate.isDirectory ? 'folder' : 'file'
-
-    return `@${kind}:${formatRefValue(rel)}`
   }
 
   const selectSkinSlashCommand = (command: string) => {
     draftRef.current = command
     aui.composer().setText(command)
-    focusInput()
+    requestMainFocus()
   }
 
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
@@ -453,6 +445,7 @@ export function ChatBar({
     const finish = () => {
       draftRef.current = composerPlainText(editor)
       aui.composer().setText(draftRef.current)
+      requestMainFocus()
       starter ? window.setTimeout(refreshTrigger, 0) : closeTrigger()
     }
 
@@ -498,7 +491,9 @@ export function ChatBar({
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
       event.preventDefault()
 
-      if (!busy) void drainNextQueued()
+      if (!busy) {
+        void drainNextQueued()
+      }
 
       return
     }
@@ -554,29 +549,13 @@ export function ChatBar({
     window.setTimeout(refreshTrigger, 0)
   }
 
-  const dragHasAttachments = (transfer: DataTransfer | null) => {
-    if (!transfer) {
-      return false
-    }
-
-    if (Array.from(transfer.types || []).includes(HERMES_PATHS_MIME)) {
-      return true
-    }
-
-    if (Array.from(transfer.types || []).includes('Files')) {
-      return true
-    }
-
-    return Array.from(transfer.items || []).some(item => item.kind === 'file')
-  }
-
   const resetDragState = () => {
     dragDepthRef.current = 0
     setDragActive(false)
   }
 
   const handleDragEnter = (event: ReactDragEvent<HTMLFormElement>) => {
-    if (!onAttachDroppedItems || !dragHasAttachments(event.dataTransfer)) {
+    if (!onAttachDroppedItems || !dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
       return
     }
 
@@ -589,7 +568,7 @@ export function ChatBar({
   }
 
   const handleDragOver = (event: ReactDragEvent<HTMLFormElement>) => {
-    if (!onAttachDroppedItems || !dragHasAttachments(event.dataTransfer)) {
+    if (!onAttachDroppedItems || !dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
       return
     }
 
@@ -625,7 +604,9 @@ export function ChatBar({
     }
 
     if (Array.from(event.dataTransfer.types || []).includes(HERMES_PATHS_MIME)) {
-      const refs = candidates.map(droppedFileInlineRef).filter((ref): ref is string => Boolean(ref))
+      const refs = candidates
+        .map(candidate => droppedFileInlineRef(candidate, cwd))
+        .filter((ref): ref is string => Boolean(ref))
 
       if (insertInlineRefs(refs)) {
         triggerHaptic('selection')
@@ -637,13 +618,13 @@ export function ChatBar({
     void Promise.resolve(onAttachDroppedItems(candidates)).then(attached => {
       if (attached) {
         triggerHaptic('selection')
-        focusInput()
+        requestMainFocus()
       }
     })
   }
 
   const handleInputDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
-    if (!dragHasAttachments(event.dataTransfer)) {
+    if (!dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
       return
     }
 
@@ -653,12 +634,15 @@ export function ChatBar({
   }
 
   const handleInputDrop = (event: ReactDragEvent<HTMLDivElement>) => {
-    if (!dragHasAttachments(event.dataTransfer)) {
+    if (!dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
       return
     }
 
     const candidates = extractDroppedFiles(event.dataTransfer)
-    const refs = candidates.map(droppedFileInlineRef).filter((ref): ref is string => Boolean(ref))
+
+    const refs = candidates
+      .map(candidate => droppedFileInlineRef(candidate, cwd))
+      .filter((ref): ref is string => Boolean(ref))
 
     if (!refs.length) {
       return
@@ -673,14 +657,14 @@ export function ChatBar({
     }
   }
 
-  const clearDraft = () => {
+  const clearDraft = useCallback(() => {
     aui.composer().setText('')
     draftRef.current = ''
 
     if (editorRef.current) {
       editorRef.current.replaceChildren()
     }
-  }
+  }, [aui])
 
   const loadIntoComposer = (text: string, attachments: ComposerAttachment[]) => {
     draftRef.current = text
@@ -696,7 +680,9 @@ export function ChatBar({
   }
 
   const beginQueuedEdit = (entry: QueuedPromptEntry) => {
-    if (!activeQueueSessionKey || queueEdit) return
+    if (!activeQueueSessionKey || queueEdit) {
+      return
+    }
 
     setQueueEdit({
       attachments: cloneAttachments($composerAttachments.get()),
@@ -710,13 +696,17 @@ export function ChatBar({
   }
 
   const exitQueuedEdit = (action: 'cancel' | 'save'): boolean => {
-    if (!queueEdit) return false
+    if (!queueEdit) {
+      return false
+    }
 
     if (action === 'save') {
       const text = draftRef.current
       const next = cloneAttachments($composerAttachments.get())
 
-      if (!text.trim() && next.length === 0) return false
+      if (!text.trim() && next.length === 0) {
+        return false
+      }
 
       const saved = updateQueuedPrompt(queueEdit.sessionKey, queueEdit.entryId, { attachments: next, text })
       triggerHaptic(saved ? 'success' : 'selection')
@@ -732,32 +722,45 @@ export function ChatBar({
   }
 
   const queueCurrentDraft = useCallback(() => {
-    if (!activeQueueSessionKey || (!draft.trim() && attachments.length === 0)) return false
-    if (!enqueueQueuedPrompt(activeQueueSessionKey, { text: draft, attachments })) return false
+    if (!activeQueueSessionKey || (!draft.trim() && attachments.length === 0)) {
+      return false
+    }
+
+    if (!enqueueQueuedPrompt(activeQueueSessionKey, { text: draft, attachments })) {
+      return false
+    }
 
     clearDraft()
     clearComposerAttachments()
     triggerHaptic('selection')
 
     return true
-  }, [activeQueueSessionKey, attachments, draft])
+  }, [activeQueueSessionKey, attachments, clearDraft, draft])
 
   // All queue drain paths share one lock + send-then-remove sequence.
   // `pickEntry` lets each caller choose head, by-id, or skip-edited.
   const runDrain = useCallback(
     async (pickEntry: (entries: QueuedPromptEntry[]) => QueuedPromptEntry | undefined): Promise<boolean> => {
-      if (drainingQueueRef.current || !activeQueueSessionKey) return false
+      if (drainingQueueRef.current || !activeQueueSessionKey) {
+        return false
+      }
 
       const entry = pickEntry(queuedPrompts)
 
-      if (!entry) return false
+      if (!entry) {
+        return false
+      }
 
       drainingQueueRef.current = true
 
       try {
-        const accepted = await Promise.resolve(onSubmit(entry.text, { attachments: entry.attachments, fromQueue: true }))
+        const accepted = await Promise.resolve(
+          onSubmit(entry.text, { attachments: entry.attachments, fromQueue: true })
+        )
 
-        if (accepted === false) return false
+        if (accepted === false) {
+          return false
+        }
 
         removeQueuedPrompt(activeQueueSessionKey, entry.id)
 
@@ -785,7 +788,9 @@ export function ChatBar({
   )
 
   const interruptAndSendNextQueued = useCallback(async () => {
-    if (queuedPrompts.length === 0) return false
+    if (queuedPrompts.length === 0) {
+      return false
+    }
 
     await Promise.resolve(onCancel())
 
@@ -797,15 +802,22 @@ export function ChatBar({
     const wasBusy = previousBusyRef.current
     previousBusyRef.current = busy
 
-    if (busy || !wasBusy || queuedPrompts.length === 0) return
+    if (busy || !wasBusy || queuedPrompts.length === 0) {
+      return
+    }
 
     void drainNextQueued()
   }, [busy, drainNextQueued, queuedPrompts.length])
 
   // Clean up queue edit when its target disappears (session swap or external delete).
   useEffect(() => {
-    if (!queueEdit) return
-    if (queueEdit.sessionKey === activeQueueSessionKey && editingQueuedPrompt) return
+    if (!queueEdit) {
+      return
+    }
+
+    if (queueEdit.sessionKey === activeQueueSessionKey && editingQueuedPrompt) {
+      return
+    }
 
     loadIntoComposer(queueEdit.draft, queueEdit.attachments)
     setQueueEdit(null)
@@ -815,9 +827,11 @@ export function ChatBar({
     if (queueEdit) {
       exitQueuedEdit('save')
     } else if (busy) {
-      if (hasComposerPayload) queueCurrentDraft()
-      else if (queuedPrompts.length > 0) void interruptAndSendNextQueued()
-      else {
+      if (hasComposerPayload) {
+        queueCurrentDraft()
+      } else if (queuedPrompts.length > 0) {
+        void interruptAndSendNextQueued()
+      } else {
         triggerHaptic('cancel')
         void Promise.resolve(onCancel())
       }
@@ -966,6 +980,7 @@ export function ChatBar({
         onBlur={() => window.setTimeout(closeTrigger, 80)}
         onDragOver={handleInputDragOver}
         onDrop={handleInputDrop}
+        onFocus={() => markActiveComposer('main')}
         onInput={handleEditorInput}
         onKeyDown={handleEditorKeyDown}
         onKeyUp={handleEditorKeyUp}
@@ -1033,10 +1048,11 @@ export function ChatBar({
             <div
               className={cn(
                 'relative z-4 isolate rounded-[inherit] border border-[color-mix(in_srgb,var(--dt-composer-ring)_calc(18%*var(--composer-ring-strength)),var(--dt-input))] shadow-composer transition-[border-color,box-shadow] duration-200 ease-out',
+                COMPOSER_DROP_FADE_CLASS,
                 'group-focus-within/composer:border-[color-mix(in_srgb,var(--dt-composer-ring)_calc(45%*var(--composer-ring-strength)),transparent)] group-focus-within/composer:shadow-composer-focus',
                 'group-has-data-[state=open]/composer:border-t-transparent',
                 'group-has-data-[state=open]/composer:shadow-[0_0.0625rem_0_0.0625rem_color-mix(in_srgb,var(--dt-composer-ring)_calc(35%*var(--composer-ring-strength)),transparent),0_0.5rem_1.5rem_color-mix(in_srgb,var(--shadow-ink)_6%,transparent)]',
-                dragActive && 'border-midground/70 shadow-composer-focus ring-2 ring-midground/40'
+                dragActive && COMPOSER_DROP_ACTIVE_CLASS
               )}
               data-slot="composer-surface"
               ref={composerSurfaceRef}
@@ -1053,14 +1069,6 @@ export function ChatBar({
                   'group-focus-within/composer:bg-[color-mix(in_srgb,var(--dt-card)_85%,transparent)]'
                 )}
               />
-              {dragActive && (
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 z-3 flex items-center justify-center bg-midground/10 text-sm font-semibold uppercase tracking-[0.18em] text-midground backdrop-blur-[1px]"
-                >
-                  Drop files to attach
-                </div>
-              )}
               <div
                 className={cn(
                   'relative z-1 flex min-h-0 w-full flex-col gap-(--composer-row-gap) overflow-hidden rounded-[inherit] px-(--composer-surface-pad-x) py-(--composer-surface-pad-y) transition-opacity duration-200 ease-out',
@@ -1074,7 +1082,9 @@ export function ChatBar({
                 <VoicePlaybackActivity />
                 {queueEdit && editingQueuedPrompt && (
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-[color-mix(in_srgb,var(--dt-composer-ring)_32%,transparent)] bg-accent/18 px-2 py-1">
-                    <div className="min-w-0 text-[0.7rem] text-muted-foreground/88">Editing queued turn in composer</div>
+                    <div className="min-w-0 text-[0.7rem] text-muted-foreground/88">
+                      Editing queued turn in composer
+                    </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <Button
                         className="h-6 rounded-md px-2 text-[0.68rem]"

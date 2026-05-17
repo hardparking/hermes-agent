@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +11,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Clipboard, FileText, FolderOpen, ImageIcon, Link, type LucideIcon, MessageSquareText, Plus } from '@/lib/icons'
+import { Clipboard, FileText, FolderOpen, type IconComponent, ImageIcon, Link, MessageSquareText } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 import { GHOST_ICON_BTN } from './controls'
@@ -38,14 +39,17 @@ export function ContextMenu({
       <DropdownMenuTrigger asChild>
         <Button
           aria-label={state.tools.label}
-          className={cn(GHOST_ICON_BTN, 'data-[state=open]:bg-accent data-[state=open]:text-foreground')}
+          className={cn(
+            GHOST_ICON_BTN,
+            'data-[state=open]:bg-(--chrome-action-hover) data-[state=open]:text-foreground'
+          )}
           disabled={!state.tools.enabled}
           size="icon"
           title={state.tools.label}
           type="button"
           variant="ghost"
         >
-          <Plus size={18} />
+          <Codicon name="add" size="1rem" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60" side="top" sideOffset={10}>
@@ -107,7 +111,7 @@ export function ContextMenuItem({
 }: {
   children: string
   disabled?: boolean
-  icon: LucideIcon
+  icon: IconComponent
   onSelect?: () => void
 }) {
   return (

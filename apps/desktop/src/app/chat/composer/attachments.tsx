@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react'
 
-import { FileText, FolderOpen, ImageIcon, Link, X } from '@/lib/icons'
+import { Codicon } from '@/components/ui/codicon'
+import { FileText, FolderOpen, ImageIcon, Link, Terminal } from '@/lib/icons'
 import { normalizeOrLocalPreviewTarget } from '@/lib/local-preview'
 import type { ComposerAttachment } from '@/store/composer'
 import { notifyError } from '@/store/notifications'
@@ -16,17 +17,17 @@ export function AttachmentList({
 }) {
   return (
     <div className="flex max-w-full flex-wrap gap-1.5 px-1 pt-1" data-slot="composer-attachments">
-      {attachments.map(a => (
-        <AttachmentPill attachment={a} key={a.id} onRemove={onRemove} />
+      {attachments.map(attachment => (
+        <AttachmentPill attachment={attachment} key={attachment.id} onRemove={onRemove} />
       ))}
     </div>
   )
 }
 
 function AttachmentPill({ attachment, onRemove }: { attachment: ComposerAttachment; onRemove?: (id: string) => void }) {
-  const Icon = { folder: FolderOpen, url: Link, image: ImageIcon, file: FileText }[attachment.kind]
+  const Icon = { folder: FolderOpen, url: Link, image: ImageIcon, file: FileText, terminal: Terminal }[attachment.kind]
   const cwd = useStore($currentCwd)
-  const canPreview = attachment.kind !== 'folder'
+  const canPreview = attachment.kind !== 'folder' && attachment.kind !== 'terminal'
   const detail = attachment.detail && attachment.detail !== attachment.label ? attachment.detail : undefined
 
   async function openPreview() {
@@ -101,7 +102,7 @@ function AttachmentPill({ attachment, onRemove }: { attachment: ComposerAttachme
           onClick={() => onRemove(attachment.id)}
           type="button"
         >
-          <X className="size-2.5" />
+          <Codicon name="close" size="0.625rem" />
         </button>
       )}
     </div>

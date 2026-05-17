@@ -56,15 +56,24 @@ const asStatus = (v: unknown): SubagentStatus =>
 
 const compact = (text: string, max = PREVIEW_MAX) => {
   const line = text.replace(/\s+/g, ' ').trim()
-  if (!line) return ''
+
+  if (!line) {
+    return ''
+  }
+
   return line.length > max ? `${line.slice(0, max - 1)}…` : line
 }
 
 const toolLabel = (name: string) =>
-  name.split('_').filter(Boolean).map(p => p[0]!.toUpperCase() + p.slice(1)).join(' ') || name
+  name
+    .split('_')
+    .filter(Boolean)
+    .map(p => p[0]!.toUpperCase() + p.slice(1))
+    .join(' ') || name
 
 const formatTool = (name: string, preview = '') => {
   const snippet = compact(preview, TOOL_PREVIEW_MAX)
+
   return snippet ? `${toolLabel(name)}("${snippet}")` : toolLabel(name)
 }
 
@@ -90,7 +99,10 @@ const idOf = (p: SubagentPayload) =>
 
 const appendStream = (stream: SubagentStreamEntry[], entry: SubagentStreamEntry) => {
   const last = stream.at(-1)
-  if (last?.kind === entry.kind && last.text === entry.text && last.isError === entry.isError) return stream
+
+  if (last?.kind === entry.kind && last.text === entry.text && last.isError === entry.isError) {
+    return stream
+  }
 
   return [...stream, entry].slice(-MAX_STREAM)
 }
@@ -108,19 +120,29 @@ function streamFromPayload(
 
   for (const tail of asTail(payload.output_tail)) {
     const line = tail.tool ? formatTool(tail.tool, tail.preview ?? '') : compact(tail.preview ?? '')
-    if (line) out.push({ at, isError: tail.isError, kind: tail.tool ? 'tool' : 'progress', text: line })
+
+    if (line) {
+      out.push({ at, isError: tail.isError, kind: tail.tool ? 'tool' : 'progress', text: line })
+    }
   }
 
-  if (tool) out.push({ at, isError: !!payload.error, kind: 'tool', text: formatTool(tool, preview) })
+  if (tool) {
+    out.push({ at, isError: !!payload.error, kind: 'tool', text: formatTool(tool, preview) })
+  }
 
-  if (eventType === 'subagent.progress' && text)
+  if (eventType === 'subagent.progress' && text) {
     out.push({ at, isError: !!payload.error, kind: 'progress', text })
+  }
 
-  if (eventType === 'subagent.thinking' && text) out.push({ at, kind: 'thinking', text })
+  if (eventType === 'subagent.thinking' && text) {
+    out.push({ at, kind: 'thinking', text })
+  }
 
   const summary = compact(str(payload.summary) || str(payload.text))
-  if (TERMINAL.has(status) && summary)
+
+  if (TERMINAL.has(status) && summary) {
     out.push({ at, isError: status === 'failed', kind: 'summary', text: summary })
+  }
 
   return out
 }
@@ -158,7 +180,10 @@ function toProgress(payload: SubagentPayload, prev: SubagentProgress | undefined
 
 export function clearSessionSubagents(sid: string) {
   const map = $subagentsBySession.get()
-  if (!(sid in map)) return
+
+  if (!(sid in map)) {
+    return
+  }
 
   const { [sid]: _drop, ...rest } = map
   $subagentsBySession.set(rest)
@@ -167,10 +192,16 @@ export function clearSessionSubagents(sid: string) {
 export function pruneDelegateFallbackSubagents(sid: string) {
   const map = $subagentsBySession.get()
   const list = map[sid]
-  if (!list?.length) return
+
+  if (!list?.length) {
+    return
+  }
 
   const next = list.filter(item => !item.id.startsWith('delegate-tool:'))
-  if (next.length === list.length) return
+
+  if (next.length === list.length) {
+    return
+  }
 
   $subagentsBySession.set({ ...map, [sid]: next })
 }
@@ -180,10 +211,16 @@ export function upsertSubagent(sid: string, payload: SubagentPayload, createIfMi
   const list = map[sid] ?? []
   const id = idOf(payload)
   const idx = list.findIndex(item => item.id === id)
-  if (idx < 0 && !createIfMissing) return
+
+  if (idx < 0 && !createIfMissing) {
+    return
+  }
 
   const prev = idx >= 0 ? list[idx] : undefined
-  if (prev && TERMINAL.has(prev.status)) return
+
+  if (prev && TERMINAL.has(prev.status)) {
+    return
+  }
 
   const next = toProgress(payload, prev, eventType)
   const nextList = idx >= 0 ? list.map(item => (item.id === id ? next : item)) : [...list, next]
@@ -193,17 +230,26 @@ export function upsertSubagent(sid: string, payload: SubagentPayload, createIfMi
 
 export function buildSubagentTree(items: readonly SubagentProgress[]): SubagentNode[] {
   const nodes = new Map<string, SubagentNode>()
-  for (const item of items) nodes.set(item.id, { ...item, children: [] })
+
+  for (const item of items) {
+    nodes.set(item.id, { ...item, children: [] })
+  }
 
   const roots: SubagentNode[] = []
+
   for (const node of nodes.values()) {
     const parent = node.parentId ? nodes.get(node.parentId) : null
-    if (parent) parent.children.push(node)
-    else roots.push(node)
+
+    if (parent) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
   }
 
   const sort = (a: SubagentNode, b: SubagentNode) =>
     a.startedAt - b.startedAt || a.taskIndex - b.taskIndex || a.goal.localeCompare(b.goal)
+
   const walk = (node: SubagentNode) => node.children.sort(sort).forEach(walk)
   roots.sort(sort).forEach(walk)
 

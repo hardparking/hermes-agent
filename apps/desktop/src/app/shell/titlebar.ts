@@ -13,13 +13,13 @@ export const TITLEBAR_FALLBACK_WINDOW_BUTTON_X = 24
 export const TITLEBAR_EDGE_INSET = 14
 
 export const titlebarButtonClass =
-  'h-[var(--titlebar-control-height)] w-[var(--titlebar-control-size)] rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
+  'h-[var(--titlebar-control-height)] w-[var(--titlebar-control-size)] rounded-md text-muted-foreground/85 transition-colors hover:bg-(--ui-control-hover-background) hover:text-foreground'
 
 export const titlebarHeaderBaseClass =
-  'pointer-events-none relative z-3 flex h-(--titlebar-height) shrink-0 items-center justify-start gap-3 bg-background/70 px-[max(0.75rem,var(--titlebar-content-inset,0px))] backdrop-blur-sm'
+  'pointer-events-none relative z-3 flex h-(--titlebar-height) shrink-0 items-center justify-start gap-3 border-b border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background) px-[max(0.75rem,var(--titlebar-content-inset,0rem))]'
 
 export const titlebarHeaderShadowClass =
-  "shadow-header after:pointer-events-none after:absolute after:left-0 after:right-0 after:top-full after:h-10 after:bg-linear-to-b after:from-background after:via-background/80 after:to-transparent after:content-['']"
+  "after:pointer-events-none after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:bg-linear-to-b after:from-(--ui-chat-surface-background) after:to-transparent after:content-['']"
 
 export function titlebarControlsPosition(
   windowButtonPosition: HermesConnection['windowButtonPosition'] | undefined,

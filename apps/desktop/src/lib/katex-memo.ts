@@ -180,9 +180,7 @@ function createMemoizedRehypeKatex(options: KatexMemoOptions = {}): Pluggable {
   return () =>
     function transform(tree: Root, file: VFile): undefined {
       visitParents(tree, 'element', (element, parents) => {
-        const classes = Array.isArray(element.properties?.className)
-          ? (element.properties.className as string[])
-          : []
+        const classes = Array.isArray(element.properties?.className) ? (element.properties.className as string[]) : []
 
         // Match the same class set rehype-katex looks for. `language-math`
         // is the markdown ` ```math ` form, `math-inline` is what
@@ -201,12 +199,7 @@ function createMemoizedRehypeKatex(options: KatexMemoOptions = {}): Pluggable {
 
         // For ` ```math ` the scope walks up to the wrapping <pre> and
         // we treat it as display math. Same logic rehype-katex uses.
-        if (
-          languageMath &&
-          parent &&
-          parent.type === 'element' &&
-          (parent as Element).tagName === 'pre'
-        ) {
+        if (languageMath && parent && parent.type === 'element' && (parent as Element).tagName === 'pre') {
           scope = parent as Element
           parent = parents[parents.length - 2]
           displayMode = true
@@ -253,10 +246,7 @@ function createMemoizedRehypeKatex(options: KatexMemoOptions = {}): Pluggable {
  * wrapper. Drop-in for `@streamdown/math`'s `createMathPlugin`.
  */
 export function createMemoizedMathPlugin(config: MathPluginConfig = {}) {
-  const remarkPlugin: Pluggable = [
-    remarkMath,
-    { singleDollarTextMath: config.singleDollarTextMath ?? false }
-  ]
+  const remarkPlugin: Pluggable = [remarkMath, { singleDollarTextMath: config.singleDollarTextMath ?? false }]
 
   const rehypePlugin = createMemoizedRehypeKatex({ errorColor: config.errorColor })
 

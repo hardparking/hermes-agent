@@ -9,11 +9,13 @@ function startedAt(key?: string): number {
   if (!key) {
     return Date.now()
   }
+
   const existing = startedAtByKey.get(key)
 
   if (existing !== undefined) {
     return existing
   }
+
   const now = Date.now()
   startedAtByKey.set(key, now)
 

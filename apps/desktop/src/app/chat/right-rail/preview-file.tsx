@@ -100,7 +100,7 @@ export function PreviewEmptyState({
             )}
             {secondaryAction && (
               <button
-                className="text-[0.6875rem] font-medium text-muted-foreground underline decoration-muted-foreground/25 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground/55 disabled:cursor-default disabled:text-muted-foreground/55 disabled:no-underline"
+                className="text-[0.6875rem] font-medium text-muted-foreground underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground disabled:cursor-default disabled:text-muted-foreground/55 disabled:no-underline"
                 disabled={secondaryAction.disabled}
                 onClick={secondaryAction.onClick}
                 type="button"
@@ -296,9 +296,9 @@ function MarkdownPreview({ text }: { text: string }) {
 
 function PreviewToggle({ asSource, onToggle }: { asSource: boolean; onToggle: () => void }) {
   return (
-    <div className="sticky top-0 z-10 flex justify-end border-b border-border/40 bg-background/90 px-3 py-1 backdrop-blur">
+    <div className="sticky top-0 z-10 flex justify-end border-b border-border/40 bg-transparent px-3 py-1 backdrop-blur">
       <button
-        className="text-[0.625rem] font-bold text-muted-foreground underline decoration-muted-foreground/25 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground/55"
+        className="text-[0.625rem] font-bold text-muted-foreground underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground"
         onClick={onToggle}
         type="button"
       >
@@ -379,7 +379,7 @@ function SourceView({ filePath, language, text }: { filePath: string; language: 
           )
         })}
       </div>
-      <div className="relative [&_pre]:m-0 [&_pre]:px-3 [&_pre]:py-3">
+      <div className="relative [&_pre]:m-0 [&_pre]:px-3 [&_pre]:py-3 [&_pre]:bg-transparent!">
         {selection && (
           <div
             aria-hidden
@@ -512,7 +512,7 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
 
   if (isImage && state.dataUrl) {
     return (
-      <div className="flex h-full w-full items-center justify-center overflow-auto bg-[color-mix(in_srgb,var(--dt-card)_42%,transparent)] p-4">
+      <div className="flex h-full w-full items-center justify-center overflow-auto bg-transparent p-4">
         <img
           alt={target.label}
           className="max-h-full max-w-full rounded-lg object-contain shadow-sm"
@@ -528,7 +528,7 @@ export function LocalFilePreview({ reloadKey, target }: { reloadKey: number; tar
     const showRendered = isMarkdown && !renderMarkdownAsSource
 
     return (
-      <div className="h-full overflow-auto bg-background">
+      <div className="h-full overflow-auto bg-transparent">
         {state.truncated && (
           <div className="border-b border-border/60 bg-muted/35 px-3 py-1.5 text-[0.68rem] text-muted-foreground">
             Showing first 512 KB.

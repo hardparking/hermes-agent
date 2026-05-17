@@ -3,7 +3,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { SetTitlebarToolGroup, TitlebarTool } from '@/app/shell/titlebar-controls'
-import { Bug, RefreshCw, X } from '@/lib/icons'
+import { Bug } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 import { $previewServerRestart, failPreviewServerRestart, type PreviewTarget } from '@/store/preview'
@@ -30,7 +30,6 @@ type PreviewWebview = HTMLElement & {
 
 interface PreviewPaneProps {
   embedded?: boolean
-  onClose: () => void
   onRestartServer?: (url: string, context?: string) => Promise<string>
   reloadRequest?: number
   setTitlebarToolGroup?: SetTitlebarToolGroup
@@ -84,7 +83,7 @@ function PreviewLoadError({
       body={
         <>
           <a
-            className="pointer-events-auto block cursor-pointer font-mono text-muted-foreground/90 underline decoration-muted-foreground/30 underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground/70"
+            className="pointer-events-auto block cursor-pointer font-mono text-muted-foreground/90 underline decoration-current/20 underline-offset-4 transition-colors hover:text-foreground"
             href={error.url}
             onClick={event => {
               event.preventDefault()
@@ -117,7 +116,6 @@ const TITLEBAR_GROUP_ID = 'preview'
 
 export function PreviewPane({
   embedded = false,
-  onClose,
   onRestartServer,
   reloadRequest = 0,
   setTitlebarToolGroup,
@@ -299,35 +297,13 @@ export function PreviewPane({
               onSelect: toggleDevTools
             }
           ]
-        : []),
-      {
-        icon: <RefreshCw className={cn(loading && 'animate-spin')} />,
-        id: `${TITLEBAR_GROUP_ID}-reload`,
-        label: 'Reload preview',
-        onSelect: reloadPreview
-      },
-      {
-        icon: <X />,
-        id: `${TITLEBAR_GROUP_ID}-close`,
-        label: 'Close preview',
-        onSelect: onClose
-      }
+        : [])
     ]
 
     setTitlebarToolGroup(TITLEBAR_GROUP_ID, tools)
 
     return () => setTitlebarToolGroup(TITLEBAR_GROUP_ID, [])
-  }, [
-    consoleOpen,
-    consoleState,
-    devtoolsOpen,
-    isWebPreview,
-    loading,
-    onClose,
-    reloadPreview,
-    setTitlebarToolGroup,
-    toggleDevTools
-  ])
+  }, [consoleOpen, consoleState, devtoolsOpen, isWebPreview, setTitlebarToolGroup, toggleDevTools])
 
   useEffect(() => {
     if (!consoleOpen) {
@@ -534,7 +510,7 @@ export function PreviewPane({
     }
 
     const webview = document.createElement('webview') as PreviewWebview
-    webview.className = 'flex h-full w-full flex-1 bg-background'
+    webview.className = 'flex h-full w-full flex-1 bg-transparent'
     webview.setAttribute('partition', 'persist:hermes-preview')
     webview.setAttribute('src', target.url)
     webview.setAttribute('webpreferences', 'contextIsolation=yes,nodeIntegration=no,sandbox=yes')
@@ -626,13 +602,13 @@ export function PreviewPane({
   }, [appendConsoleEntry, consoleState, isWebPreview, target.url])
 
   return (
-    <aside className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-background text-muted-foreground">
+    <aside className="relative flex h-full w-full min-w-0 flex-col overflow-hidden bg-transparent text-muted-foreground">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {!embedded && (
           <div className="pointer-events-none flex min-h-(--titlebar-height) items-center gap-1.5 border-b border-border/60 bg-background px-2 py-1">
             <div className="min-w-0 flex-1">
               <a
-                className="pointer-events-auto inline max-w-full cursor-pointer truncate text-left text-xs font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+                className="pointer-events-auto inline max-w-full cursor-pointer truncate text-left text-xs font-medium text-foreground underline-offset-4 decoration-current/20 transition-colors hover:text-primary hover:underline"
                 href={currentUrl}
                 rel="noreferrer"
                 target="_blank"
@@ -645,12 +621,12 @@ export function PreviewPane({
         )}
 
         <div
-          className="pointer-events-auto relative min-h-0 flex-1 overflow-hidden bg-background"
+          className="pointer-events-auto relative min-h-0 flex-1 overflow-hidden bg-transparent"
           ref={previewContentRef}
         >
           <div
             className={cn(
-              'absolute inset-0 flex bg-background',
+              'absolute inset-0 flex bg-transparent',
               (!isWebPreview || loadError) && 'pointer-events-none opacity-0'
             )}
             ref={hostRef}

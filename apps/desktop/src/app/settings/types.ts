@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 
 import type { HermesGateway } from '@/hermes'
-import type { LucideIcon } from '@/lib/icons'
+import type { IconComponent } from '@/lib/icons'
 import type { EnvVarInfo } from '@/types/hermes'
 
 export type SettingsView = 'about' | 'gateway' | 'keys' | 'mcp' | 'tools' | `config:${string}`
@@ -28,7 +28,7 @@ export interface ProviderGroup {
 export interface DesktopConfigSection {
   id: string
   label: string
-  icon: LucideIcon
+  icon: IconComponent
   keys: string[]
 }
 

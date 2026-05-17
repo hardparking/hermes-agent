@@ -33,6 +33,24 @@ contextBridge.exposeInMainWorld('hermesDesktop', {
   fetchLinkTitle: url => ipcRenderer.invoke('hermes:fetchLinkTitle', url),
   readDir: dirPath => ipcRenderer.invoke('hermes:fs:readDir', dirPath),
   gitRoot: startPath => ipcRenderer.invoke('hermes:fs:gitRoot', startPath),
+  terminal: {
+    dispose: id => ipcRenderer.invoke('hermes:terminal:dispose', id),
+    resize: (id, size) => ipcRenderer.invoke('hermes:terminal:resize', id, size),
+    start: options => ipcRenderer.invoke('hermes:terminal:start', options),
+    write: (id, data) => ipcRenderer.invoke('hermes:terminal:write', id, data),
+    onData: (id, callback) => {
+      const channel = `hermes:terminal:${id}:data`
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
+    onExit: (id, callback) => {
+      const channel = `hermes:terminal:${id}:exit`
+      const listener = (_event, payload) => callback(payload)
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    }
+  },
   onClosePreviewRequested: callback => {
     const listener = () => callback()
     ipcRenderer.on('hermes:close-preview-requested', listener)

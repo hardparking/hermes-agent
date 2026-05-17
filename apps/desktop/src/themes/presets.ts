@@ -6,10 +6,9 @@
 import type { DesktopTheme, DesktopThemeTypography } from './types'
 
 const SYSTEM_SANS =
-  'ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, system-ui, sans-serif'
+  '"Segoe WPC", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif'
 
-const SYSTEM_MONO =
-  'ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Monaco, Consolas, "Liberation Mono", monospace'
+const SYSTEM_MONO = '"Cascadia Code", "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Monaco, Consolas, monospace'
 
 export const DEFAULT_TYPOGRAPHY: DesktopThemeTypography = { fontSans: SYSTEM_SANS, fontMono: SYSTEM_MONO }
 
@@ -17,43 +16,44 @@ const NOUS_BLUE = '#0053FD'
 const PSYCHE_BLUE = '#1540B1'
 const PSYCHE_WARM = '#FFE6CB'
 
-const tint = (pct: number) => `color-mix(in srgb, ${NOUS_BLUE} ${pct}%, #FFFFFF)`
-const tintTransparent = (pct: number) => `color-mix(in srgb, ${NOUS_BLUE} ${pct}%, transparent)`
+const nousTint = (pct: number) => `color-mix(in srgb, ${NOUS_BLUE} ${pct}%, #FFFFFF)`
+const nousTintTransparent = (pct: number) => `color-mix(in srgb, ${NOUS_BLUE} ${pct}%, transparent)`
 
 /**
- * Nous — canonical Hermes/Nous identity. Replaces the historical trio of
- * `nous-light`, `default`, and `gold`. Light = bright Nous blue on white;
- * dark = Hermes lens-blue with cream foreground.
+ * Nous — canonical Hermes desktop identity. The palette keeps the current
+ * glass geometry neutral, then lets the old bb/gui blue and psyche cream
+ * return as accent seeds.
  */
 export const nousTheme: DesktopTheme = {
   name: 'nous',
   label: 'Nous',
-  description: 'Bright Nous blue in light mode, Hermes blue in dark mode',
+  description: 'Glass neutrals with Nous blue accents',
   colors: {
-    background: '#FFFFFF',
+    background: '#F8FAFF',
     foreground: '#17171A',
     card: '#FFFFFF',
     cardForeground: '#17171A',
-    muted: tint(5),
+    muted: nousTint(5),
     mutedForeground: '#666678',
     popover: '#FFFFFF',
     popoverForeground: '#17171A',
     primary: NOUS_BLUE,
-    primaryForeground: '#FFFFFF',
-    secondary: tint(7),
+    primaryForeground: '#FCFCFC',
+    secondary: nousTint(7),
     secondaryForeground: '#242432',
-    accent: tint(10),
+    accent: nousTint(10),
     accentForeground: '#202030',
-    border: tintTransparent(22),
-    input: tintTransparent(30),
+    border: nousTintTransparent(22),
+    input: nousTintTransparent(30),
     ring: NOUS_BLUE,
     midground: NOUS_BLUE,
+    composerRing: NOUS_BLUE,
     destructive: '#C72E4D',
     destructiveForeground: '#FFFFFF',
-    sidebarBackground: tint(2.5),
-    sidebarBorder: tintTransparent(18),
-    userBubble: tint(6),
-    userBubbleBorder: tintTransparent(24)
+    sidebarBackground: '#F3F7FF',
+    sidebarBorder: nousTintTransparent(18),
+    userBubble: nousTint(6),
+    userBubbleBorder: nousTintTransparent(24)
   },
   darkColors: {
     background: '#0D2F86',

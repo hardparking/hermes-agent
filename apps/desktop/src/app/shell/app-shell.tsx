@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react'
 import type { CSSProperties, ReactNode } from 'react'
 import { useSyncExternalStore } from 'react'
 
-import { Backdrop } from '@/components/Backdrop'
 import { PaneShell } from '@/components/pane-shell'
 import { SidebarProvider } from '@/components/ui/sidebar'
 import {
@@ -21,9 +20,11 @@ import { TitlebarControls, type TitlebarTool } from './titlebar-controls'
 
 interface AppShellProps {
   children: ReactNode
+  commandCenterOpen?: boolean
   leftStatusbarItems?: readonly StatusbarItem[]
   leftTitlebarTools?: readonly TitlebarTool[]
   onOpenSettings: () => void
+  onOpenSearch: () => void
   overlays?: ReactNode
   statusbarItems?: readonly StatusbarItem[]
   titlebarTools?: readonly TitlebarTool[]
@@ -46,9 +47,11 @@ const viewportIsFullscreen = () =>
 
 export function AppShell({
   children,
+  commandCenterOpen = false,
   leftStatusbarItems,
   leftTitlebarTools,
   onOpenSettings,
+  onOpenSearch,
   overlays,
   statusbarItems,
   titlebarTools
@@ -70,9 +73,9 @@ export function AppShell({
     ? 0
     : titlebarControls.left + TITLEBAR_HEIGHT + Math.round(TITLEBAR_HEIGHT / 2)
 
-  // The static system cluster (file-browser, haptics, settings) is hardcoded
-  // in TitlebarControls. Pane-supplied tools (preview's group) render in a
-  // separate cluster anchored further left.
+  // The static system cluster (haptics, profiles, settings, right-sidebar) is
+  // hardcoded in TitlebarControls. Pane-supplied tools (preview's group) render
+  // in a separate cluster anchored further left.
   //
   // Width math has to include the `gap-x-1` (0.25rem) between buttons:
   // N buttons + (N - 1) inner gaps, plus one extra 0.25rem of breathing room
@@ -105,7 +108,7 @@ export function AppShell({
 
   return (
     <SidebarProvider
-      className="h-screen min-h-0 bg-background"
+      className="h-screen min-h-0 flex-col bg-background"
       onOpenChange={setSidebarOpen}
       open={sidebarOpen}
       style={
@@ -127,10 +130,15 @@ export function AppShell({
         } as CSSProperties
       }
     >
-      <TitlebarControls leftTools={leftTitlebarTools} onOpenSettings={onOpenSettings} tools={titlebarTools} />
+      <TitlebarControls
+        commandCenterOpen={commandCenterOpen}
+        leftTools={leftTitlebarTools}
+        onOpenSearch={onOpenSearch}
+        onOpenSettings={onOpenSettings}
+        tools={titlebarTools}
+      />
 
-      <Backdrop />
-      <main className="relative z-3 flex h-screen w-full flex-col overflow-hidden pr-0.75 pt-0.75 transition-none">
+      <main className="relative z-3 flex min-h-0 w-full flex-1 flex-col overflow-hidden transition-none">
         <PaneShell className="min-h-0 flex-1">
           <div
             aria-hidden="true"

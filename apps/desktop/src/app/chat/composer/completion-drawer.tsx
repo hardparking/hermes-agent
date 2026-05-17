@@ -3,23 +3,30 @@ import { ComposerPrimitive } from '@assistant-ui/react'
 import type { ReactNode } from 'react'
 
 export const COMPLETION_DRAWER_CLASS = [
-  'absolute inset-x-0 bottom-[calc(100%-0.5rem)] z-50',
+  'absolute bottom-[calc(100%+0.25rem)] left-0 z-50',
+  'w-60 max-w-[calc(100vw-2rem)]',
   'max-h-[min(23rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain',
-  'border border-b-0',
-  'border-[color-mix(in_srgb,var(--dt-ring)_45%,transparent)]',
-  'bg-[color-mix(in_srgb,var(--dt-popover)_96%,transparent)]',
-  'px-1.5 pb-3 pt-1.5 text-popover-foreground',
-  'backdrop-blur-[0.75rem] backdrop-saturate-[1.1]',
-  '[-webkit-backdrop-filter:blur(0.75rem)_saturate(1.1)]',
-  'data-[state=open]:-mb-2',
-  'data-[state=open]:shadow-[0_-0.0625rem_0_0.0625rem_color-mix(in_srgb,var(--dt-ring)_35%,transparent),0_-1rem_2.25rem_-1.75rem_color-mix(in_srgb,var(--dt-foreground)_34%,transparent),0_-0.3125rem_0.875rem_-0.6875rem_color-mix(in_srgb,var(--dt-foreground)_22%,transparent)]'
+  'rounded-lg border border-(--ui-stroke-secondary)',
+  'bg-[color-mix(in_srgb,var(--ui-bg-elevated)_96%,transparent)]',
+  'p-1 text-xs text-popover-foreground shadow-md',
+  'backdrop-blur-md'
+].join(' ')
+
+export const COMPLETION_DRAWER_BELOW_CLASS = [
+  'absolute left-0 top-[calc(100%+0.25rem)] z-50',
+  'w-60 max-w-[calc(100vw-2rem)]',
+  'max-h-[min(23rem,calc(100vh-8rem))] overflow-y-auto overscroll-contain',
+  'rounded-lg border border-(--ui-stroke-secondary)',
+  'bg-[color-mix(in_srgb,var(--ui-bg-elevated)_96%,transparent)]',
+  'p-1 text-xs text-popover-foreground shadow-md',
+  'backdrop-blur-md'
 ].join(' ')
 
 export const COMPLETION_DRAWER_ROW_CLASS = [
-  'flex w-full min-w-0 items-baseline gap-2 rounded-md px-2.5 py-1',
-  'text-left text-xs transition-colors',
-  'hover:bg-[color-mix(in_srgb,var(--dt-accent)_70%,transparent)]',
-  'data-[highlighted]:bg-[color-mix(in_srgb,var(--dt-accent)_70%,transparent)]'
+  'relative flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1',
+  'w-full min-w-0 text-left text-xs outline-hidden transition-colors',
+  'hover:bg-(--ui-bg-tertiary)',
+  'data-[highlighted]:bg-(--ui-bg-tertiary) data-[highlighted]:text-foreground'
 ].join(' ')
 
 export function ComposerCompletionDrawer({
@@ -48,9 +55,9 @@ export function ComposerCompletionDrawer({
 
 export function CompletionDrawerEmpty({ children, title }: { children?: ReactNode; title: string }) {
   return (
-    <div className="px-3 py-3 text-sm text-muted-foreground">
+    <div className="px-3 py-3 text-xs text-(--ui-text-tertiary)">
       <p>{title}</p>
-      {children && <p className="mt-1 text-xs text-muted-foreground/80">{children}</p>}
+      {children && <p className="mt-1 text-xs text-(--ui-text-tertiary)">{children}</p>}
     </div>
   )
 }

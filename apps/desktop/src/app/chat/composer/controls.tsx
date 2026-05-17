@@ -1,13 +1,17 @@
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import { triggerHaptic } from '@/lib/haptics'
-import { ArrowUp, AudioLines, Layers3, Loader2, Mic, MicOff, Square } from '@/lib/icons'
+import { AudioLines, Layers3, Loader2, Square } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 import type { ConversationStatus } from './hooks/use-voice-conversation'
 import type { ChatBarState, VoiceStatus } from './types'
 
-export const ICON_BTN = 'size-(--composer-control-size) shrink-0 rounded-full'
-export const GHOST_ICON_BTN = cn(ICON_BTN, 'text-muted-foreground hover:bg-accent hover:text-foreground')
+export const ICON_BTN = 'size-(--composer-control-size) shrink-0 rounded-md'
+export const GHOST_ICON_BTN = cn(
+  ICON_BTN,
+  'text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground'
+)
 // Send/voice-conversation primary: solid foreground-on-background circle
 // (reads as black-on-white in light mode, white-on-black in dark mode) to
 // match the reference composer's high-contrast CTA. Keeps the pill itself
@@ -89,7 +93,7 @@ export function ComposerControls({
               <span className="block size-3 rounded-[0.1875rem] bg-current" />
             )
           ) : (
-            <ArrowUp size={18} />
+            <Codicon name="arrow-up" size="1rem" />
           )}
         </Button>
       )}
@@ -136,7 +140,7 @@ function ConversationPill({
         type="button"
         variant="ghost"
       >
-        {muted ? <MicOff size={16} /> : <Mic size={16} />}
+        <Codicon name={muted ? 'mic-off' : 'mic'} size="1rem" />
       </Button>
       {listening && (
         <Button
@@ -246,7 +250,7 @@ function DictationButton({
       ) : status === 'transcribing' ? (
         <Loader2 className="animate-spin" size={16} />
       ) : (
-        <Mic size={16} />
+        <Codicon name="mic" size="1rem" />
       )}
     </Button>
   )

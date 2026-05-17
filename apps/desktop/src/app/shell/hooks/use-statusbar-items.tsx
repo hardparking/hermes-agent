@@ -3,16 +3,14 @@ import { useMemo } from 'react'
 
 import type { CommandCenterSection } from '@/app/command-center'
 import { GatewayMenuPanel } from '@/app/shell/gateway-menu-panel'
-import { Activity, AlertCircle, Clock, Command, Cpu, FolderOpen, GitBranch, Hash, Loader2, Sparkles } from '@/lib/icons'
+import { Activity, AlertCircle, Clock, Command, Cpu, Hash, Loader2, Sparkles } from '@/lib/icons'
 import type { RuntimeReadinessResult } from '@/lib/runtime-readiness'
-import { compactPath, contextBarLabel, LiveDuration, usageContextLabel } from '@/lib/statusbar'
+import { contextBarLabel, LiveDuration, usageContextLabel } from '@/lib/statusbar'
 import { cn } from '@/lib/utils'
 import { $desktopActionTasks } from '@/store/activity'
 import { $previewServerRestartStatus } from '@/store/preview'
 import {
   $busy,
-  $currentBranch,
-  $currentCwd,
   $currentModel,
   $currentProvider,
   $currentUsage,
@@ -30,7 +28,6 @@ import type { StatusbarItem } from '../statusbar-controls'
 
 interface StatusbarItemsOptions {
   agentsOpen: boolean
-  browseSessionCwd: () => Promise<void>
   commandCenterOpen: boolean
   extraLeftItems: readonly StatusbarItem[]
   extraRightItems: readonly StatusbarItem[]
@@ -45,7 +42,6 @@ interface StatusbarItemsOptions {
 
 export function useStatusbarItems({
   agentsOpen,
-  browseSessionCwd,
   commandCenterOpen,
   extraLeftItems,
   extraRightItems,
@@ -58,8 +54,6 @@ export function useStatusbarItems({
   toggleCommandCenter
 }: StatusbarItemsOptions) {
   const busy = useStore($busy)
-  const currentBranch = useStore($currentBranch)
-  const currentCwd = useStore($currentCwd)
   const currentModel = useStore($currentModel)
   const currentProvider = useStore($currentProvider)
   const currentUsage = useStore($currentUsage)
@@ -79,10 +73,10 @@ export function useStatusbarItems({
   const gatewayMenuContent = useMemo(
     () => (
       <GatewayMenuPanel
-        logLines={gatewayLogLines}
-        onOpenSystem={() => openCommandCenterSection('system')}
         gatewayState={gatewayState}
         inferenceStatus={inferenceStatus}
+        logLines={gatewayLogLines}
+        onOpenSystem={() => openCommandCenterSection('system')}
         statusSnapshot={statusSnapshot}
       />
     ),
@@ -95,7 +89,11 @@ export function useStatusbarItems({
     const failed = actions.filter(t => !t.status.running && (t.status.exit_code ?? 0) !== 0).length
     const previewRunning = previewServerRestartStatus === 'running' ? 1 : 0
     const previewFailed = previewServerRestartStatus === 'error' ? 1 : 0
-    const subagentsRunning = Object.values(subagentsBySession).reduce((sum, items) => sum + activeSubagentCount(items), 0)
+
+    const subagentsRunning = Object.values(subagentsBySession).reduce(
+      (sum, items) => sum + activeSubagentCount(items),
+      0
+    )
 
     return {
       bgFailed: failed + previewFailed,
@@ -108,6 +106,7 @@ export function useStatusbarItems({
   const gatewayConnecting = gatewayState === 'connecting'
   const inferenceReady = gatewayOpen && inferenceStatus?.ready === true
   const gatewayDegraded = gatewayOpen || gatewayConnecting
+
   const gatewayDetail = gatewayOpen
     ? inferenceStatus?.ready
       ? 'ready'
@@ -117,6 +116,7 @@ export function useStatusbarItems({
     : gatewayConnecting
       ? 'connecting'
       : 'offline'
+
   const gatewayClassName = inferenceReady
     ? undefined
     : gatewayDegraded
@@ -277,37 +277,9 @@ export function useStatusbarItems({
         title: currentProvider ? `Switch model · ${currentProvider}: ${currentModel || ''}` : 'Open model picker',
         variant: 'action'
       },
-      {
-        icon: <FolderOpen className="size-3" />,
-        id: 'cwd',
-        label: currentCwd ? compactPath(currentCwd) : 'No project cwd',
-        onSelect: () => void browseSessionCwd(),
-        title: currentCwd ? `Change working directory · ${currentCwd}` : 'Choose working directory',
-        variant: 'action'
-      },
-      {
-        hidden: !currentBranch,
-        icon: <GitBranch className="size-3" />,
-        id: 'branch',
-        label: currentBranch,
-        title: currentBranch ? `Current branch: ${currentBranch}` : undefined,
-        variant: 'text'
-      },
       versionItem
     ],
-    [
-      browseSessionCwd,
-      busy,
-      contextBar,
-      contextUsage,
-      currentBranch,
-      currentCwd,
-      currentModel,
-      currentProvider,
-      sessionStartedAt,
-      turnStartedAt,
-      versionItem
-    ]
+    [busy, contextBar, contextUsage, currentModel, currentProvider, sessionStartedAt, turnStartedAt, versionItem]
   )
 
   const leftStatusbarItems = useMemo(

@@ -31,6 +31,14 @@ const {
   resolveTimeoutMs
 } = require('./hardening.cjs')
 
+let nodePty = null
+
+try {
+  nodePty = require('@homebridge/node-pty-prebuilt-multiarch')
+} catch {
+  nodePty = null
+}
+
 const USER_DATA_OVERRIDE = process.env.HERMES_DESKTOP_USER_DATA_DIR
 if (USER_DATA_OVERRIDE) {
   const resolvedUserData = path.resolve(USER_DATA_OVERRIDE)
@@ -133,6 +141,7 @@ const APP_ICON_PATHS = [
 ]
 
 let rendererTitleBarTheme = null
+const terminalSessions = new Map()
 
 function isHexColor(value) {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value)
@@ -608,11 +617,10 @@ function findSystemPython() {
   if (pyExe) {
     for (const version of SUPPORTED_VERSIONS) {
       try {
-        const out = execFileSync(
-          pyExe,
-          [`-${version}`, '-c', 'import sys; print(sys.executable)'],
-          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }
-        )
+        const out = execFileSync(pyExe, [`-${version}`, '-c', 'import sys; print(sys.executable)'], {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore']
+        })
         const candidate = out.trim()
         if (candidate && fileExists(candidate)) return candidate
       } catch {
@@ -2792,7 +2800,21 @@ ipcMain.handle('hermes:fetchLinkTitle', (_event, url) => fetchLinkTitle(url))
 
 // Always-hidden noise (covers non-git projects too — gitignore would catch
 // these anyway when present, but we want the same hygiene without one).
-const FS_READDIR_HIDDEN = new Set(['.git', '.hg', '.svn', 'node_modules', '__pycache__', '.next', '.venv', 'venv'])
+const FS_READDIR_HIDDEN = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  '.cache',
+  '.next',
+  '.turbo',
+  '.venv',
+  '__pycache__',
+  'build',
+  'dist',
+  'node_modules',
+  'target',
+  'venv'
+])
 
 function findGitRoot(start) {
   let dir = start
@@ -2816,6 +2838,76 @@ function findGitRoot(start) {
   }
 
   return null
+}
+
+function terminalShellCommand() {
+  if (IS_WINDOWS) {
+    return { args: [], command: process.env.COMSPEC || 'cmd.exe' }
+  }
+
+  const configuredShell = process.env.SHELL || ''
+  const shellPath =
+    (path.isAbsolute(configuredShell) && fs.existsSync(configuredShell) && configuredShell) ||
+    ['/bin/zsh', '/bin/bash', '/bin/sh'].find(candidate => fs.existsSync(candidate)) ||
+    '/bin/sh'
+  const shellName = path.basename(shellPath)
+  const interactiveArgs = shellName.includes('zsh') || shellName.includes('bash') ? ['-il'] : ['-i']
+
+  return { args: interactiveArgs, command: shellPath, name: shellName }
+}
+
+function safeTerminalCwd(cwd) {
+  const candidate = path.resolve(String(cwd || app.getPath('home')))
+
+  try {
+    const stat = fs.statSync(candidate)
+
+    return stat.isDirectory() ? candidate : path.dirname(candidate)
+  } catch {
+    return app.getPath('home')
+  }
+}
+
+function terminalShellEnv() {
+  const env = { ...process.env }
+
+  // Electron is commonly launched through `npm run dev`; do not leak npm's
+  // managed prefix into a user's interactive shell (nvm/proto warn loudly).
+  for (const key of Object.keys(env)) {
+    if (key === 'npm_config_prefix' || key.startsWith('npm_config_') || key.startsWith('npm_package_')) {
+      delete env[key]
+    }
+  }
+
+  env.COLORTERM = env.COLORTERM || 'truecolor'
+  env.LC_CTYPE = env.LC_CTYPE || 'UTF-8'
+  env.TERM = 'xterm-256color'
+  env.TERM_PROGRAM = 'Hermes'
+  env.TERM_PROGRAM_VERSION = app.getVersion()
+
+  return env
+}
+
+function terminalChannel(id, suffix) {
+  return `hermes:terminal:${id}:${suffix}`
+}
+
+function disposeTerminalSession(id) {
+  const sessionInfo = terminalSessions.get(id)
+
+  if (!sessionInfo) {
+    return false
+  }
+
+  terminalSessions.delete(id)
+
+  try {
+    sessionInfo.pty.kill()
+  } catch {
+    // Process may already be gone.
+  }
+
+  return true
 }
 
 ipcMain.handle('hermes:fs:readDir', async (_event, dirPath) => {
@@ -2858,6 +2950,72 @@ ipcMain.handle('hermes:fs:gitRoot', async (_event, startPath) => {
     return findGitRoot(resolved)
   }
 })
+
+ipcMain.handle('hermes:terminal:start', async (event, payload = {}) => {
+  if (!nodePty) {
+    throw new Error('PTY support is unavailable. Reinstall desktop dependencies and restart Hermes.')
+  }
+
+  const id = crypto.randomUUID()
+  const { args, command, name } = terminalShellCommand()
+  const cwd = safeTerminalCwd(payload?.cwd)
+  const cols = Math.max(2, Number.parseInt(String(payload?.cols || 80), 10) || 80)
+  const rows = Math.max(2, Number.parseInt(String(payload?.rows || 24), 10) || 24)
+  const ptyProcess = nodePty.spawn(command, args, {
+    cols,
+    cwd,
+    env: terminalShellEnv(),
+    name: 'xterm-256color',
+    rows
+  })
+
+  terminalSessions.set(id, { pty: ptyProcess, webContentsId: event.sender.id })
+
+  const send = (suffix, payload) => {
+    if (event.sender.isDestroyed()) {
+      return
+    }
+
+    event.sender.send(terminalChannel(id, suffix), payload)
+  }
+
+  ptyProcess.onData(data => send('data', data))
+  ptyProcess.onExit(({ exitCode, signal }) => {
+    terminalSessions.delete(id)
+    send('exit', { code: exitCode, signal: signal || null })
+  })
+  event.sender.once('destroyed', () => disposeTerminalSession(id))
+
+  return { cwd, id, shell: name }
+})
+
+ipcMain.handle('hermes:terminal:write', (_event, id, data) => {
+  const sessionInfo = terminalSessions.get(String(id || ''))
+
+  if (!sessionInfo) {
+    return false
+  }
+
+  sessionInfo.pty.write(String(data || ''))
+
+  return true
+})
+
+ipcMain.handle('hermes:terminal:resize', (_event, id, size = {}) => {
+  const sessionInfo = terminalSessions.get(String(id || ''))
+
+  if (!sessionInfo) {
+    return false
+  }
+
+  const cols = Math.max(2, Number.parseInt(String(size?.cols || 80), 10) || 80)
+  const rows = Math.max(2, Number.parseInt(String(size?.rows || 24), 10) || 24)
+
+  sessionInfo.pty.resize(cols, rows)
+
+  return true
+})
+ipcMain.handle('hermes:terminal:dispose', (_event, id) => disposeTerminalSession(String(id || '')))
 
 ipcMain.handle('hermes:updates:check', async () =>
   checkUpdates().catch(error => ({

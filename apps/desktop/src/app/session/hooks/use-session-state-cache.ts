@@ -2,8 +2,9 @@ import { useStore } from '@nanostores/react'
 import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
 
 import type { ChatMessage } from '@/lib/chat-messages'
+import { preserveLocalAssistantErrors } from '@/lib/chat-messages'
 import { createClientSessionState } from '@/lib/chat-runtime'
-import { $busy, setSessionWorking } from '@/store/session'
+import { $busy, $messages, setSessionWorking } from '@/store/session'
 
 import type { ClientSessionState } from '../../types'
 
@@ -78,6 +79,20 @@ export function useSessionStateCache({
     return created
   }, [])
 
+  const flushPendingViewState = useCallback(() => {
+    const pending = pendingViewStateRef.current
+    pendingViewStateRef.current = null
+
+    if (!pending || pending.sessionId !== activeSessionIdRef.current) {
+      return
+    }
+
+    setMessages(preserveLocalAssistantErrors(pending.state.messages, $messages.get()))
+    setBusy(pending.state.busy)
+    busyRef.current = pending.state.busy
+    setAwaitingResponse(pending.state.awaitingResponse)
+  }, [busyRef, setAwaitingResponse, setBusy, setMessages])
+
   const syncSessionStateToView = useCallback(
     (sessionId: string, state: ClientSessionState) => {
       pendingViewStateRef.current = { sessionId, state }
@@ -87,41 +102,17 @@ export function useSessionStateCache({
       }
 
       if (typeof window === 'undefined') {
-        const pending = pendingViewStateRef.current
-
-        if (!pending || pending.sessionId !== activeSessionIdRef.current) {
-          pendingViewStateRef.current = null
-
-          return
-        }
-
-        pendingViewStateRef.current = null
-        setMessages(pending.state.messages)
-        setBusy(pending.state.busy)
-        busyRef.current = pending.state.busy
-        setAwaitingResponse(pending.state.awaitingResponse)
+        flushPendingViewState()
 
         return
       }
 
       viewSyncRafRef.current = window.requestAnimationFrame(() => {
         viewSyncRafRef.current = null
-        const pending = pendingViewStateRef.current
-
-        if (!pending || pending.sessionId !== activeSessionIdRef.current) {
-          pendingViewStateRef.current = null
-
-          return
-        }
-
-        pendingViewStateRef.current = null
-        setMessages(pending.state.messages)
-        setBusy(pending.state.busy)
-        busyRef.current = pending.state.busy
-        setAwaitingResponse(pending.state.awaitingResponse)
+        flushPendingViewState()
       })
     },
-    [busyRef, setAwaitingResponse, setBusy, setMessages]
+    [flushPendingViewState]
   )
 
   useEffect(

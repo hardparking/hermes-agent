@@ -16,11 +16,13 @@ export function todosFromMessageContent(content: unknown): TodoItem[] {
     if (!part || typeof part !== 'object') {
       continue
     }
+
     const row = part as Record<string, unknown>
 
     if (row.type !== 'tool-call' || row.toolName !== 'todo') {
       continue
     }
+
     const parsed = parseTodos(row.result) ?? parseTodos(row.args)
 
     if (parsed !== null) {
@@ -70,6 +72,7 @@ export const HoistedTodoPanel: FC<{ todos: TodoItem[] }> = ({ todos }) => {
   if (!todos.length) {
     return null
   }
+
   const label = headerLabel(todos)
 
   return (

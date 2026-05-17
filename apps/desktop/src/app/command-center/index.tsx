@@ -113,7 +113,7 @@ interface SectionSearchEntry {
 }
 
 const NAVIGATION_SEARCH_ENTRIES: readonly NavigationSearchEntry[] = [
-  { id: 'nav-new-chat', route: NEW_CHAT_ROUTE, title: 'New chat', detail: 'Start a fresh session' },
+  { id: 'nav-new-chat', route: NEW_CHAT_ROUTE, title: 'New agent', detail: 'Start a fresh session' },
   { id: 'nav-settings', route: SETTINGS_ROUTE, title: 'Settings', detail: 'Configure Hermes desktop' },
   { id: 'nav-skills', route: SKILLS_ROUTE, title: 'Skills', detail: 'Enable and inspect skills' },
   {
@@ -365,31 +365,28 @@ export function CommandCenterView({
     }
   }, [])
 
-  const refreshUsage = useCallback(
-    async (days: UsagePeriod) => {
-      const requestId = usageRequestRef.current + 1
-      usageRequestRef.current = requestId
-      setUsageLoading(true)
-      setUsageError('')
+  const refreshUsage = useCallback(async (days: UsagePeriod) => {
+    const requestId = usageRequestRef.current + 1
+    usageRequestRef.current = requestId
+    setUsageLoading(true)
+    setUsageError('')
 
-      try {
-        const response = await getUsageAnalytics(days)
+    try {
+      const response = await getUsageAnalytics(days)
 
-        if (usageRequestRef.current === requestId) {
-          setUsage(response)
-        }
-      } catch (error) {
-        if (usageRequestRef.current === requestId) {
-          setUsageError(error instanceof Error ? error.message : String(error))
-        }
-      } finally {
-        if (usageRequestRef.current === requestId) {
-          setUsageLoading(false)
-        }
+      if (usageRequestRef.current === requestId) {
+        setUsage(response)
       }
-    },
-    []
-  )
+    } catch (error) {
+      if (usageRequestRef.current === requestId) {
+        setUsageError(error instanceof Error ? error.message : String(error))
+      }
+    } finally {
+      if (usageRequestRef.current === requestId) {
+        setUsageLoading(false)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!debouncedQuery) {
@@ -583,7 +580,10 @@ export function CommandCenterView({
   const beginAuxiliaryEdit = useCallback(
     (task: string) => {
       const current = auxiliary?.tasks.find(entry => entry.task === task)
-      const initialProvider = current?.provider && current.provider !== 'auto' ? current.provider : mainModel?.provider ?? ''
+
+      const initialProvider =
+        current?.provider && current.provider !== 'auto' ? current.provider : (mainModel?.provider ?? '')
+
       const initialModel = current?.model || mainModel?.model || ''
       setAuxDraft({ provider: initialProvider, model: initialModel })
       setEditingAuxTask(task)
@@ -658,15 +658,7 @@ export function CommandCenterView({
           {SECTIONS.map(value => (
             <OverlayNavItem
               active={section === value}
-              icon={
-                value === 'sessions'
-                  ? Pin
-                  : value === 'system'
-                    ? Activity
-                    : value === 'models'
-                      ? Cpu
-                      : BarChart3
-              }
+              icon={value === 'sessions' ? Pin : value === 'system' ? Activity : value === 'models' ? Cpu : BarChart3}
               key={value}
               label={SECTION_LABELS[value]}
               onClick={() => setSection(value)}
@@ -1168,7 +1160,7 @@ function UsagePanel({ error, loading, onPeriodChange, onRefresh, period, usage }
         ) : (
           <div className="text-xs text-muted-foreground">
             No usage in the last {period} days.{' '}
-            <button className="underline" onClick={onRefresh} type="button">
+            <button className="underline underline-offset-4 decoration-current/20" onClick={onRefresh} type="button">
               Retry
             </button>
           </div>

@@ -1,6 +1,4 @@
 import { normalizeExternalUrl } from '@/lib/external-link'
-import { Command, FileText, Globe, LinkIcon, Search, Sparkles, Wrench } from '@/lib/icons'
-import type { LucideIcon } from '@/lib/icons'
 import { extractToolErrorMessage, formatToolResultSummary } from '@/lib/tool-result-summary'
 
 export type ToolTone = 'agent' | 'browser' | 'default' | 'file' | 'image' | 'terminal' | 'web'
@@ -31,7 +29,7 @@ export interface ToolView {
   detail: string
   detailLabel: string
   durationLabel?: string
-  icon: LucideIcon
+  icon?: string
   imageUrl?: string
   inlineDiff: string
   previewTarget?: string
@@ -46,7 +44,7 @@ export interface ToolView {
 
 interface ToolMeta {
   done: string
-  icon: LucideIcon
+  icon?: string
   pending: string
   tone: ToolTone
 }
@@ -63,39 +61,39 @@ export interface MessageRunningStateSlice {
 }
 
 const TOOL_META: Record<string, ToolMeta> = {
-  browser_click: { done: 'Clicked page element', pending: 'Clicking page element', icon: Globe, tone: 'browser' },
-  browser_fill: { done: 'Filled form field', pending: 'Filling form field', icon: Globe, tone: 'browser' },
-  browser_navigate: { done: 'Opened page', pending: 'Opening page', icon: Globe, tone: 'browser' },
+  browser_click: { done: 'Clicked page element', pending: 'Clicking page element', icon: 'globe', tone: 'browser' },
+  browser_fill: { done: 'Filled form field', pending: 'Filling form field', icon: 'globe', tone: 'browser' },
+  browser_navigate: { done: 'Opened page', pending: 'Opening page', icon: 'globe', tone: 'browser' },
   browser_snapshot: {
     done: 'Captured page snapshot',
     pending: 'Capturing page snapshot',
-    icon: Globe,
+    icon: 'globe',
     tone: 'browser'
   },
   browser_take_screenshot: {
     done: 'Captured screenshot',
     pending: 'Capturing screenshot',
-    icon: Sparkles,
+    icon: 'file-media',
     tone: 'browser'
   },
-  browser_type: { done: 'Typed on page', pending: 'Typing on page', icon: Globe, tone: 'browser' },
-  edit_file: { done: 'Edited file', pending: 'Editing file', icon: FileText, tone: 'file' },
-  execute_code: { done: 'Ran code', pending: 'Running code', icon: Command, tone: 'terminal' },
-  image_generate: { done: 'Generated image', pending: 'Generating image', icon: Sparkles, tone: 'image' },
-  list_files: { done: 'Listed files', pending: 'Listing files', icon: FileText, tone: 'file' },
-  read_file: { done: 'Read file', pending: 'Reading file', icon: FileText, tone: 'file' },
-  search_files: { done: 'Searched files', pending: 'Searching files', icon: FileText, tone: 'file' },
+  browser_type: { done: 'Typed on page', pending: 'Typing on page', icon: 'globe', tone: 'browser' },
+  edit_file: { done: 'Edited file', pending: 'Editing file', icon: 'edit', tone: 'file' },
+  execute_code: { done: 'Ran code', pending: 'Running code', icon: 'terminal', tone: 'terminal' },
+  image_generate: { done: 'Generated image', pending: 'Generating image', icon: 'file-media', tone: 'image' },
+  list_files: { done: 'Listed files', pending: 'Listing files', icon: 'files', tone: 'file' },
+  read_file: { done: 'Read file', pending: 'Reading file', icon: 'file', tone: 'file' },
+  search_files: { done: 'Searched files', pending: 'Searching files', icon: 'search', tone: 'file' },
   session_search_recall: {
     done: 'Searched session history',
     pending: 'Searching session history',
-    icon: Search,
+    icon: 'search',
     tone: 'agent'
   },
-  terminal: { done: 'Ran command', pending: 'Running command', icon: Command, tone: 'terminal' },
-  todo: { done: 'Updated todos', pending: 'Updating todos', icon: Wrench, tone: 'agent' },
-  web_extract: { done: 'Read webpage', pending: 'Reading webpage', icon: LinkIcon, tone: 'web' },
-  web_search: { done: 'Searched web', pending: 'Searching web', icon: Search, tone: 'web' },
-  write_file: { done: 'Edited file', pending: 'Editing file', icon: FileText, tone: 'file' }
+  terminal: { done: 'Ran command', pending: 'Running command', icon: 'terminal', tone: 'terminal' },
+  todo: { done: 'Updated todos', pending: 'Updating todos', icon: 'tools', tone: 'agent' },
+  web_extract: { done: 'Read webpage', pending: 'Reading webpage', icon: 'globe', tone: 'web' },
+  web_search: { done: 'Searched web', pending: 'Searching web', icon: 'search', tone: 'web' },
+  write_file: { done: 'Edited file', pending: 'Editing file', icon: 'edit', tone: 'file' }
 }
 
 const INLINE_CODE_SPLIT_RE = /(`[^`\n]+`)/g
@@ -117,9 +115,9 @@ function titleForTool(name: string): string {
   )
 }
 
-const PREFIX_META: { icon: LucideIcon; prefix: string; tone: ToolTone; verb: string }[] = [
-  { prefix: 'browser_', verb: 'Browser', icon: Globe, tone: 'browser' },
-  { prefix: 'web_', verb: 'Web', icon: Search, tone: 'web' }
+const PREFIX_META: { icon?: string; prefix: string; tone: ToolTone; verb: string }[] = [
+  { prefix: 'browser_', verb: 'Browser', icon: 'globe', tone: 'browser' },
+  { prefix: 'web_', verb: 'Web', icon: 'globe', tone: 'web' }
 ]
 
 function toolMeta(name: string): ToolMeta {
@@ -137,7 +135,7 @@ function toolMeta(name: string): ToolMeta {
         icon: prefix.icon,
         tone: prefix.tone
       }
-    : { done: action, pending: `Running ${action.toLowerCase()}`, icon: Wrench, tone: 'default' }
+    : { done: action, pending: `Running ${action.toLowerCase()}`, tone: 'default' }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -836,9 +834,17 @@ export function inlineDiffFromResult(result: unknown): string {
 // Falls back to a string only when there's something concrete to render —
 // counts of opaque items/fields are noise, not signal.
 function minimalValueSummary(value: unknown): string {
-  if (value == null) return ''
-  if (typeof value === 'string') return value
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (value == null) {
+    return ''
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
 
   return ''
 }
@@ -1195,6 +1201,7 @@ export function buildToolView(part: ToolPart, inlineDiff: string): ToolView {
 
   const searchHits =
     part.toolName === 'web_search' && status !== 'error' ? extractSearchResults(part.result) : undefined
+
   const resultCount = status === 'error' ? null : toolResultCount(part, argsRecord, resultRecord)
 
   return {

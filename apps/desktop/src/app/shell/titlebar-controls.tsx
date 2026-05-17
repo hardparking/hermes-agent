@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { Codicon } from '@/components/ui/codicon'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +12,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { triggerHaptic } from '@/lib/haptics'
-import { FolderOpen, NotebookTabs, Settings, Users, Volume2, VolumeX } from '@/lib/icons'
+import { Volume2, VolumeX } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { $hapticsMuted, toggleHapticsMuted } from '@/store/haptics'
 import { $fileBrowserOpen, $sidebarOpen, toggleFileBrowserOpen, toggleSidebarOpen } from '@/store/layout'
@@ -40,10 +41,18 @@ export type SetTitlebarToolGroup = (id: string, tools: readonly TitlebarTool[], 
 interface TitlebarControlsProps extends ComponentProps<'div'> {
   leftTools?: readonly TitlebarTool[]
   tools?: readonly TitlebarTool[]
+  commandCenterOpen?: boolean
   onOpenSettings: () => void
+  onOpenSearch: () => void
 }
 
-export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }: TitlebarControlsProps) {
+export function TitlebarControls({
+  leftTools = [],
+  tools = [],
+  commandCenterOpen = false,
+  onOpenSettings,
+  onOpenSearch
+}: TitlebarControlsProps) {
   const navigate = useNavigate()
   const hapticsMuted = useStore($hapticsMuted)
   const fileBrowserOpen = useStore($fileBrowserOpen)
@@ -63,7 +72,7 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
 
   const leftToolbarTools: TitlebarTool[] = [
     {
-      icon: <NotebookTabs />,
+      icon: <Codicon name="layout-sidebar-left" />,
       id: 'sidebar',
       label: sidebarOpen ? 'Hide sidebar' : 'Show sidebar',
       onSelect: () => {
@@ -71,21 +80,33 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
         toggleSidebarOpen()
       }
     },
+    {
+      active: commandCenterOpen,
+      icon: <Codicon name="search" />,
+      id: 'search',
+      label: 'Search',
+      onSelect: () => {
+        triggerHaptic('open')
+        onOpenSearch()
+      },
+      title: 'Search sessions, views, and actions'
+    },
     ...leftTools
   ]
 
+  const rightSidebarTool: TitlebarTool = {
+    active: fileBrowserOpen,
+    icon: <Codicon name="layout-sidebar-right" />,
+    id: 'right-sidebar',
+    label: fileBrowserOpen ? 'Hide right sidebar' : 'Show right sidebar',
+    onSelect: () => {
+      triggerHaptic('tap')
+      toggleFileBrowserOpen()
+    }
+  }
+
   // Static system tools — always pinned to the screen's right edge.
   const systemTools: TitlebarTool[] = [
-    {
-      active: fileBrowserOpen,
-      icon: <FolderOpen />,
-      id: 'file-browser',
-      label: fileBrowserOpen ? 'Hide file browser' : 'Show file browser',
-      onSelect: () => {
-        triggerHaptic('tap')
-        toggleFileBrowserOpen()
-      }
-    },
     {
       active: hapticsMuted,
       icon: hapticsMuted ? <VolumeX /> : <Volume2 />,
@@ -94,7 +115,7 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
       onSelect: toggleHaptics
     },
     {
-      icon: <Settings />,
+      icon: <Codicon name="settings-gear" />,
       id: 'settings',
       label: 'Open settings',
       onSelect: () => {
@@ -113,7 +134,7 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
     <>
       <div
         aria-label="Window controls"
-        className="fixed left-(--titlebar-controls-left) top-(--titlebar-controls-top) z-70 flex translate-y-[2px] flex-row items-center gap-x-1 pointer-events-auto select-none [-webkit-app-region:no-drag]"
+        className="fixed left-(--titlebar-controls-left) top-(--titlebar-controls-top) z-70 flex translate-y-0.5 flex-row items-center gap-x-1 pointer-events-auto select-none [-webkit-app-region:no-drag]"
       >
         {leftToolbarTools
           .filter(tool => !tool.hidden)
@@ -150,6 +171,7 @@ export function TitlebarControls({ leftTools = [], tools = [], onOpenSettings }:
         ))}
         <ProfilesMenuButton navigate={navigate} />
         {settingsTool && <TitlebarToolButton navigate={navigate} tool={settingsTool} />}
+        <TitlebarToolButton navigate={navigate} tool={rightSidebarTool} />
       </div>
     </>
   )
@@ -161,15 +183,12 @@ function ProfilesMenuButton({ navigate }: { navigate: ReturnType<typeof useNavig
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Profiles"
-          className={cn(
-            titlebarButtonClass,
-            'grid place-items-center bg-transparent select-none [&_svg]:size-4'
-          )}
+          className={cn(titlebarButtonClass, 'grid place-items-center bg-transparent select-none [&_svg]:size-4')}
           onPointerDown={event => event.stopPropagation()}
           title="Profiles"
           type="button"
         >
-          <Users />
+          <Codicon name="account" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64" sideOffset={8}>
@@ -186,7 +205,7 @@ function ProfilesMenuButton({ navigate }: { navigate: ReturnType<typeof useNavig
             navigate(PROFILES_ROUTE)
           }}
         >
-          <Users className="size-4" />
+          <Codicon name="account" size="1rem" />
           <span>Manage profiles</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -198,6 +217,7 @@ function TitlebarToolButton({ navigate, tool }: { navigate: ReturnType<typeof us
   const className = cn(
     titlebarButtonClass,
     'grid place-items-center bg-transparent select-none [&_svg]:size-4',
+    tool.active && 'bg-(--ui-control-active-background)! text-foreground!',
     tool.className
   )
 

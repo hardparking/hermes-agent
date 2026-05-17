@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type CSSProperties, useState } from 'react'
 
 import introCopyJsonl from './intro-copy.jsonl?raw'
 
@@ -161,9 +161,17 @@ export function Intro({ personality, seed }: IntroProps) {
       className="pointer-events-none flex w-full min-w-0 flex-col items-center justify-center px-3 py-6 text-center text-muted-foreground sm:px-6 lg:px-8"
       data-slot="aui_intro"
     >
-      <div className="w-full min-w-0 max-w-xl">
-        <p className="mb-3 font-['Collapse'] text-[clamp(3.25rem,4.6dvw,4.875rem)] font-bold uppercase leading-[0.95] tracking-wider text-midground mix-blend-plus-lighter dark:text-foreground/90">
-          Hermes Agent
+      <div className="w-full min-w-0">
+        <p
+          className="fit-text mx-auto mb-3 w-4/5 font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter dark:text-foreground/90"
+          style={
+            { '--fit-text-line-height': '0.9', '--fit-text-max': '8rem', '--fit-text-min': '2.75rem' } as CSSProperties
+          }
+        >
+          <span>
+            <span>HERMES AGENT</span>
+          </span>
+          <span aria-hidden="true">HERMES AGENT</span>
         </p>
 
         <p className="m-0 text-center leading-normal tracking-tight">{copy.body}</p>

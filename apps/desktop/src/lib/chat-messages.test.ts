@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ChatMessagePart } from './chat-messages'
+import type { ChatMessage, ChatMessagePart } from './chat-messages'
 import {
   appendAssistantTextPart,
   chatMessageText,
+  preserveLocalAssistantErrors,
   renderMediaTags,
   toChatMessages,
   upsertToolPart
@@ -142,6 +143,173 @@ describe('renderMediaTags', () => {
   })
 })
 
+describe('preserveLocalAssistantErrors', () => {
+  it('preserves a local user+error pair when hydration omits the failed turn', () => {
+    const nextMessages: ChatMessage[] = [
+      {
+        id: 'stored-user',
+        parts: [{ text: 'earlier', type: 'text' }],
+        role: 'user'
+      }
+    ]
+
+    const currentMessages: ChatMessage[] = [
+      {
+        id: 'stored-user',
+        parts: [{ text: 'earlier', type: 'text' }],
+        role: 'user'
+      },
+      {
+        id: 'user-123',
+        parts: [{ text: 'new prompt', type: 'text' }],
+        role: 'user'
+      },
+      {
+        error: 'OpenRouter 403',
+        id: 'assistant-error-1',
+        parts: [],
+        role: 'assistant'
+      }
+    ]
+
+    const merged = preserveLocalAssistantErrors(nextMessages, currentMessages)
+
+    expect(merged.map(message => message.id)).toEqual(['stored-user', 'user-123', 'assistant-error-1'])
+    expect(merged[2]?.error).toBe('OpenRouter 403')
+  })
+
+  it('does not keep orphan local user turns when there is no inline assistant error', () => {
+    const nextMessages: ChatMessage[] = [
+      {
+        id: 'stored-user',
+        parts: [{ text: 'earlier', type: 'text' }],
+        role: 'user'
+      }
+    ]
+
+    const currentMessages: ChatMessage[] = [
+      ...nextMessages,
+      {
+        id: 'user-123',
+        parts: [{ text: 'new prompt', type: 'text' }],
+        role: 'user'
+      }
+    ]
+
+    const merged = preserveLocalAssistantErrors(nextMessages, currentMessages)
+
+    expect(merged.map(message => message.id)).toEqual(['stored-user'])
+  })
+
+  it('does not duplicate local user when stored history already has equivalent text', () => {
+    const nextMessages: ChatMessage[] = [
+      {
+        id: 'stored-user',
+        parts: [{ text: 'hi', type: 'text' }],
+        role: 'user'
+      }
+    ]
+
+    const currentMessages: ChatMessage[] = [
+      {
+        id: 'optimistic-user',
+        parts: [{ text: 'hi', type: 'text' }],
+        role: 'user'
+      },
+      {
+        error: 'OpenRouter 403',
+        id: 'assistant-error-1',
+        parts: [],
+        role: 'assistant'
+      }
+    ]
+
+    const merged = preserveLocalAssistantErrors(nextMessages, currentMessages)
+
+    expect(merged.map(message => message.id)).toEqual(['stored-user', 'assistant-error-1'])
+  })
+
+  it('keeps local user when only older history has equivalent text', () => {
+    const nextMessages: ChatMessage[] = [
+      {
+        id: 'older-user',
+        parts: [{ text: 'hi', type: 'text' }],
+        role: 'user'
+      },
+      {
+        id: 'older-assistant',
+        parts: [{ text: 'hello', type: 'text' }],
+        role: 'assistant'
+      },
+      {
+        id: 'tail-user',
+        parts: [{ text: 'different prompt', type: 'text' }],
+        role: 'user'
+      }
+    ]
+
+    const currentMessages: ChatMessage[] = [
+      {
+        id: 'optimistic-user',
+        parts: [{ text: 'hi', type: 'text' }],
+        role: 'user'
+      },
+      {
+        error: 'OpenRouter 403',
+        id: 'assistant-error-1',
+        parts: [],
+        role: 'assistant'
+      }
+    ]
+
+    const merged = preserveLocalAssistantErrors(nextMessages, currentMessages)
+
+    expect(merged.map(message => message.id)).toEqual([
+      'older-user',
+      'older-assistant',
+      'tail-user',
+      'optimistic-user',
+      'assistant-error-1'
+    ])
+  })
+
+  it('keeps local assistant error when hydrated message reuses same id', () => {
+    const nextMessages: ChatMessage[] = [
+      {
+        id: 'user-1',
+        parts: [{ text: 'new prompt', type: 'text' }],
+        role: 'user'
+      },
+      {
+        id: 'assistant-stream-1',
+        parts: [{ text: '', type: 'text' }],
+        role: 'assistant'
+      }
+    ]
+
+    const currentMessages: ChatMessage[] = [
+      {
+        id: 'user-1',
+        parts: [{ text: 'new prompt', type: 'text' }],
+        role: 'user'
+      },
+      {
+        error: 'OpenRouter 403',
+        id: 'assistant-stream-1',
+        parts: [],
+        role: 'assistant'
+      }
+    ]
+
+    const merged = preserveLocalAssistantErrors(nextMessages, currentMessages)
+
+    const assistant = merged.find(message => message.id === 'assistant-stream-1')
+
+    expect(assistant?.error).toBe('OpenRouter 403')
+    expect(assistant?.pending).toBe(false)
+  })
+})
+
 describe('upsertToolPart', () => {
   it('preserves inline diffs from tool completion events', () => {
     const parts = upsertToolPart(
@@ -221,6 +389,7 @@ describe('upsertToolPart', () => {
 
     const completedResult =
       completed[0] && 'result' in completed[0] ? (completed[0].result as Record<string, unknown>) : {}
+
     const clearedResult = cleared[0] && 'result' in cleared[0] ? (cleared[0].result as Record<string, unknown>) : {}
 
     expect(completedResult.todos).toEqual([{ content: 'Boil water', id: 'boil', status: 'in_progress' }])

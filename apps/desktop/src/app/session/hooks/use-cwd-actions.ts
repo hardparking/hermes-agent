@@ -7,11 +7,16 @@ import type { SessionRuntimeInfo } from '@/types/hermes'
 interface CwdActionsOptions {
   activeSessionId: string | null
   activeSessionIdRef: MutableRefObject<string | null>
-  currentCwd: string
+  onSessionRuntimeInfo?: (info: Pick<SessionRuntimeInfo, 'branch' | 'cwd'>) => void
   requestGateway: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>
 }
 
-export function useCwdActions({ activeSessionId, activeSessionIdRef, currentCwd, requestGateway }: CwdActionsOptions) {
+export function useCwdActions({
+  activeSessionId,
+  activeSessionIdRef,
+  onSessionRuntimeInfo,
+  requestGateway
+}: CwdActionsOptions) {
   const refreshProjectBranch = useCallback(
     async (cwd: string) => {
       const target = cwd.trim()
@@ -44,23 +49,15 @@ export function useCwdActions({ activeSessionId, activeSessionIdRef, currentCwd,
         return
       }
 
-      const persistGlobal = async () => {
-        const info = await requestGateway<{ branch?: string; cwd?: string; value?: string }>('config.set', {
-          ...(activeSessionId && { session_id: activeSessionId }),
-          key: 'terminal.cwd',
-          value: trimmed
-        })
-
-        setCurrentCwd(info.cwd || info.value || trimmed)
-
-        if (!activeSessionId) {
-          setCurrentBranch(info.branch || '')
-        }
-      }
-
       if (!activeSessionId) {
         try {
-          await persistGlobal()
+          const info = await requestGateway<{ branch?: string; cwd?: string }>('config.get', {
+            key: 'project',
+            cwd: trimmed
+          })
+
+          setCurrentCwd(info.cwd || trimmed)
+          setCurrentBranch(info.branch || '')
         } catch (err) {
           notifyError(err, 'Working directory change failed')
         }
@@ -76,44 +73,27 @@ export function useCwdActions({ activeSessionId, activeSessionIdRef, currentCwd,
 
         setCurrentCwd(info.cwd || trimmed)
         setCurrentBranch(info.branch || '')
+        onSessionRuntimeInfo?.({ branch: info.branch || '', cwd: info.cwd || trimmed })
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
 
-        // Older gateways without `session.cwd.set` fall back to a global write —
-        // user has to restart the active session for it to take effect.
         if (!message.includes('unknown method')) {
           notifyError(err, 'Working directory change failed')
 
           return
         }
 
-        try {
-          await persistGlobal()
-          notify({
-            kind: 'warning',
-            title: 'Working directory saved',
-            message: 'Restart the desktop backend to apply cwd changes to this active session.'
-          })
-        } catch (fallbackErr) {
-          notifyError(fallbackErr, 'Working directory change failed')
-        }
+        setCurrentCwd(trimmed)
+        setCurrentBranch('')
+        notify({
+          kind: 'warning',
+          title: 'Working directory staged',
+          message: 'Restart the desktop backend to apply cwd changes to this active session.'
+        })
       }
     },
-    [activeSessionId, requestGateway]
+    [activeSessionId, onSessionRuntimeInfo, requestGateway]
   )
 
-  const browseSessionCwd = useCallback(async () => {
-    const paths = await window.hermesDesktop?.selectPaths({
-      title: 'Change working directory',
-      defaultPath: currentCwd || undefined,
-      directories: true,
-      multiple: false
-    })
-
-    if (paths?.[0]) {
-      await changeSessionCwd(paths[0])
-    }
-  }, [changeSessionCwd, currentCwd])
-
-  return { browseSessionCwd, changeSessionCwd, refreshProjectBranch }
+  return { changeSessionCwd, refreshProjectBranch }
 }

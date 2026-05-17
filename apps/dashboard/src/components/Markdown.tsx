@@ -331,7 +331,7 @@ function InlineContent({
                 href={node.href}
                 target="_blank"
                 rel="noreferrer"
-                className="text-primary underline underline-offset-2 decoration-primary/30 hover:decoration-primary/60 transition-colors"
+                className="text-primary underline underline-offset-4 decoration-current/40 transition-colors"
               >
                 {node.text}
               </a>

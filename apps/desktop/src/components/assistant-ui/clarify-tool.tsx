@@ -273,7 +273,7 @@ function ClarifyToolPending({ args }: ToolCallMessagePartProps) {
         <div className="flex items-center justify-between text-[0.6875rem] text-muted-foreground/85">
           <span>1–{choices.length} to pick</span>
           <button
-            className="bg-transparent text-muted-foreground/85 underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+            className="bg-transparent text-muted-foreground/85 underline-offset-4 decoration-current/20 hover:text-foreground hover:underline disabled:opacity-50"
             disabled={!ready || submitting}
             onClick={() => void respond('')}
             type="button"

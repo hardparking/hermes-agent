@@ -1,17 +1,22 @@
-import { type RefObject, useEffect } from 'react'
+import { type RefObject, useLayoutEffect, useRef } from 'react'
 
 export function useResizeObserver(onResize: () => void, ...refs: readonly RefObject<Element | null>[]) {
-  const elements = refs.map(ref => ref.current)
+  const refsRef = useRef(refs)
+  refsRef.current = refs
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof ResizeObserver === 'undefined') {
+      onResize()
+
       return
     }
 
     const observer = new ResizeObserver(() => onResize())
     let observed = false
 
-    for (const element of elements) {
+    for (const ref of refsRef.current) {
+      const element = ref.current
+
       if (!element) {
         continue
       }
@@ -29,5 +34,5 @@ export function useResizeObserver(onResize: () => void, ...refs: readonly RefObj
     onResize()
 
     return () => observer.disconnect()
-  }, [onResize, ...elements])
+  }, [onResize])
 }

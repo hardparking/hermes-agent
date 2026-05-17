@@ -8,7 +8,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ZoomableImage } from '@/components/chat/zoomable-image'
 import { extractEmbeddedImages } from '@/lib/embedded-images'
 
-const HERMES_REF_TYPES = ['file', 'folder', 'url', 'image', 'tool', 'line'] as const
+const HERMES_REF_TYPES = ['file', 'folder', 'url', 'image', 'tool', 'line', 'terminal'] as const
 type HermesRefType = (typeof HERMES_REF_TYPES)[number]
 
 /** Single source of truth for chip icon glyphs (Tabler outline @ 24×24).
@@ -37,7 +37,8 @@ const ICON_PATHS: Record<HermesRefType, string[]> = {
     'M14 14l1 -1c.928 -.893 2.072 -.893 3 0l3 3'
   ],
   tool: ['M7 10h3v-3l-3.5 -3.5a6 6 0 0 1 8 8l6 6a2 2 0 0 1 -3 3l-6 -6a6 6 0 0 1 -8 -8l3.5 3.5'],
-  line: ['M5 9l14 0', 'M5 15l14 0', 'M11 4l-4 16', 'M17 4l-4 16']
+  line: ['M5 9l14 0', 'M5 15l14 0', 'M11 4l-4 16', 'M17 4l-4 16'],
+  terminal: ['M5 7l5 5l-5 5', 'M12 19l7 0']
 }
 
 const ICON_FALLBACK = ['M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', 'M16 12v1.5a2.5 2.5 0 0 0 5 0v-1.5a9 9 0 1 0 -5.5 8.28']
@@ -112,7 +113,7 @@ export const DIRECTIVE_CHIP_CLASS =
 const CANONICAL_DIRECTIVE_RE = /:([\w-]{1,64})\[([^\]\n]{1,1024})\](?:\{name=([^}\n]{1,1024})\})?/g
 
 const HERMES_DIRECTIVE_RE = new RegExp(
-  '@(file|folder|url|image|tool|line):(' + '`[^`\\n]+`' + '|"[^"\\n]+"' + "|'[^'\\n]+'" + '|\\S+' + ')',
+  '@(file|folder|url|image|tool|line|terminal):(' + '`[^`\\n]+`' + '|"[^"\\n]+"' + "|'[^'\\n]+'" + '|\\S+' + ')',
   'g'
 )
 
@@ -248,6 +249,10 @@ function parseDirectiveText(text: string): Unstable_DirectiveSegment[] {
 }
 
 function shortLabel(type: HermesRefType, id: string): string {
+  if (type === 'terminal') {
+    return id || 'terminal'
+  }
+
   if (type === 'url') {
     try {
       const parsed = new URL(id)

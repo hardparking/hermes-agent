@@ -144,8 +144,8 @@ export function DesktopOnboardingOverlay({ enabled, onCompleted, requestGateway 
   const showPicker = flow.status === 'idle' || flow.status === 'success'
 
   return (
-    <div className="fixed inset-0 z-1300 flex items-center justify-center bg-background/80 p-6 backdrop-blur-xl">
-      <div className="w-full max-w-2xl overflow-hidden rounded-3xl border border-border bg-card/95 shadow-2xl">
+    <div className="fixed inset-0 z-1300 flex items-center justify-center bg-(--ui-chat-surface-background) p-6">
+      <div className="w-full max-w-[45rem] overflow-hidden rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-chat-bubble-background) shadow-sm">
         <Header />
         <div className="grid gap-5 p-6">
           {reason ? <ReasonNotice reason={reason} /> : null}
@@ -209,14 +209,14 @@ function Preparing({ boot }: { boot: DesktopBootState }) {
 
 function Header() {
   return (
-    <div className="border-b border-border bg-muted/30 px-6 py-5">
+    <div className="border-b border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background) px-6 py-5">
       <div className="flex items-start gap-3">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)">
           <Sparkles className="size-5" />
         </div>
         <div>
-          <h2 className="text-lg font-semibold tracking-tight">Welcome to Hermes</h2>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+          <h2 className="text-[0.9375rem] font-semibold tracking-tight">Welcome to Hermes</h2>
+          <p className="mt-1 max-w-xl text-[0.8125rem] leading-5 text-(--ui-text-tertiary)">
             Connect a model provider to start chatting. Most options take one click.
           </p>
         </div>
@@ -252,7 +252,7 @@ function FooterLink({ children, onClick }: { children: React.ReactNode; onClick:
   return (
     <div className="pt-2 text-center">
       <button
-        className="text-sm font-semibold text-foreground underline-offset-4 hover:underline"
+        className="text-sm font-semibold text-foreground underline-offset-4 decoration-current/20 hover:underline"
         onClick={onClick}
         type="button"
       >

@@ -1,8 +1,8 @@
 import { type ReactNode, useEffect } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Codicon } from '@/components/ui/codicon'
 import { triggerHaptic } from '@/lib/haptics'
-import { X } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 interface OverlayViewProps {
@@ -32,7 +32,9 @@ export function OverlayView({
   // Settings still closes the picker first instead of the underlying overlay.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
 
       event.preventDefault()
       triggerHaptic('close')
@@ -46,7 +48,7 @@ export function OverlayView({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/22 p-3 backdrop-blur-[2px] sm:p-8"
+      className="fixed inset-0 z-50 bg-black/22 p-3 backdrop-blur-[0.125rem] sm:p-6"
       onClick={event => {
         if (event.target === event.currentTarget) {
           closeOverlay()
@@ -56,7 +58,7 @@ export function OverlayView({
     >
       <div
         className={cn(
-          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--dt-border)_60%,transparent)] bg-background/96 shadow-[0_1.5rem_4rem_-2rem_color-mix(in_srgb,#000_40%,transparent)]',
+          'relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-(--ui-stroke-secondary) bg-(--ui-chat-surface-background) shadow-md',
           rootClassName
         )}
       >
@@ -69,12 +71,12 @@ export function OverlayView({
 
           <Button
             aria-label={closeLabel}
-            className="pointer-events-auto absolute right-3.75 top-[calc(0.1875rem+var(--titlebar-height)/2)] h-7 w-7 -translate-y-1/2 rounded-lg text-muted-foreground hover:bg-accent/70 hover:text-foreground [-webkit-app-region:no-drag]"
+            className="pointer-events-auto absolute right-3 top-[calc(0.1875rem+var(--titlebar-height)/2)] h-7 w-7 -translate-y-1/2 rounded-md text-(--ui-text-tertiary) hover:bg-(--chrome-action-hover) hover:text-foreground [-webkit-app-region:no-drag]"
             onClick={closeOverlay}
             size="icon"
             variant="ghost"
           >
-            <X size={16} />
+            <Codicon name="close" size="1rem" />
           </Button>
         </div>
 

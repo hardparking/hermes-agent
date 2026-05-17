@@ -1,8 +1,45 @@
 import type { Unstable_TriggerItem } from '@assistant-ui/core'
 
+import { Codicon } from '@/components/ui/codicon'
 import { cn } from '@/lib/utils'
 
-import { COMPLETION_DRAWER_CLASS, COMPLETION_DRAWER_ROW_CLASS, CompletionDrawerEmpty } from './completion-drawer'
+import {
+  COMPLETION_DRAWER_BELOW_CLASS,
+  COMPLETION_DRAWER_CLASS,
+  COMPLETION_DRAWER_ROW_CLASS,
+  CompletionDrawerEmpty
+} from './completion-drawer'
+
+const AT_ICON_BY_TYPE: Record<string, string> = {
+  diff: 'diff',
+  file: 'book',
+  folder: 'folder',
+  git: 'git-branch',
+  image: 'file-media',
+  simple: 'symbol-misc',
+  staged: 'diff-added',
+  tool: 'tools',
+  url: 'globe'
+}
+
+function completionIcon(kind: '@' | '/', item: Unstable_TriggerItem) {
+  if (kind === '/') {
+    return 'terminal'
+  }
+
+  const meta = item.metadata as { rawText?: string } | undefined
+  const raw = meta?.rawText || item.label
+
+  if (raw.startsWith('@diff')) {
+    return AT_ICON_BY_TYPE.diff
+  }
+
+  if (raw.startsWith('@staged')) {
+    return AT_ICON_BY_TYPE.staged
+  }
+
+  return AT_ICON_BY_TYPE[item.type] || AT_ICON_BY_TYPE.simple
+}
 
 interface ComposerTriggerPopoverProps {
   activeIndex: number
@@ -11,6 +48,7 @@ interface ComposerTriggerPopoverProps {
   loading: boolean
   onHover: (index: number) => void
   onPick: (item: Unstable_TriggerItem) => void
+  placement?: 'bottom' | 'top'
 }
 
 export function ComposerTriggerPopover({
@@ -19,11 +57,12 @@ export function ComposerTriggerPopover({
   kind,
   loading,
   onHover,
-  onPick
+  onPick,
+  placement = 'top'
 }: ComposerTriggerPopoverProps) {
   return (
     <div
-      className={COMPLETION_DRAWER_CLASS}
+      className={placement === 'bottom' ? COMPLETION_DRAWER_BELOW_CLASS : COMPLETION_DRAWER_CLASS}
       data-slot="composer-completion-drawer"
       data-state="open"
       onMouseDown={event => event.preventDefault()}
@@ -50,19 +89,19 @@ export function ComposerTriggerPopover({
 
           return (
             <button
-              className={cn(
-                COMPLETION_DRAWER_ROW_CLASS,
-                index === activeIndex && 'bg-[color-mix(in_srgb,var(--dt-accent)_70%,transparent)]'
-              )}
+              className={cn(COMPLETION_DRAWER_ROW_CLASS, index === activeIndex && 'bg-(--ui-bg-tertiary)')}
               data-highlighted={index === activeIndex ? '' : undefined}
               key={item.id}
               onClick={() => onPick(item)}
               onMouseEnter={() => onHover(index)}
               type="button"
             >
-              <span className="shrink-0 truncate font-mono font-medium leading-5 text-foreground">{display}</span>
+              <span className="grid size-3.5 shrink-0 place-items-center text-(--ui-text-tertiary)">
+                <Codicon name={completionIcon(kind, item)} size="0.875rem" />
+              </span>
+              <span className="min-w-0 shrink truncate font-mono font-medium leading-5 text-foreground">{display}</span>
               {description && (
-                <span className="min-w-0 truncate leading-5 text-muted-foreground/80">{description}</span>
+                <span className="min-w-0 flex-1 truncate leading-5 text-(--ui-text-tertiary)">{description}</span>
               )}
             </button>
           )

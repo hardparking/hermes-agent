@@ -2,9 +2,10 @@ import { useStore } from '@nanostores/react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
 import { triggerHaptic } from '@/lib/haptics'
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, type LucideIcon, X } from '@/lib/icons'
+import { AlertCircle, AlertTriangle, CheckCircle2, type IconComponent, Info } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import {
   $notifications,
@@ -16,7 +17,7 @@ import {
 
 type ToneVariant = 'default' | 'destructive' | 'warning' | 'success'
 
-const tone: Record<NotificationKind, { icon: LucideIcon; iconClass: string; variant: ToneVariant }> = {
+const tone: Record<NotificationKind, { icon: IconComponent; iconClass: string; variant: ToneVariant }> = {
   error: { icon: AlertCircle, iconClass: 'text-destructive', variant: 'destructive' },
   warning: { icon: AlertTriangle, iconClass: 'text-primary', variant: 'warning' },
   info: { icon: Info, iconClass: 'text-muted-foreground', variant: 'default' },
@@ -122,7 +123,7 @@ function NotificationItem({ notification }: { notification: AppNotification }) {
         onClick={() => dismissNotification(notification.id)}
         type="button"
       >
-        <X className="size-3.5" />
+        <Codicon name="close" size="0.875rem" />
       </button>
     </Alert>
   )

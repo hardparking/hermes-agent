@@ -9,9 +9,11 @@ import { useSkinCommand } from '@/themes/use-skin-command'
 
 import { formatRefValue } from '../components/assistant-ui/directive-text'
 import { getSessionMessages, listSessions } from '../hermes'
-import { toChatMessages } from '../lib/chat-messages'
+import { preserveLocalAssistantErrors, toChatMessages } from '../lib/chat-messages'
 import {
   $pinnedSessionIds,
+  $sessionsLimit,
+  bumpSessionsLimit,
   FILE_BROWSER_DEFAULT_WIDTH,
   FILE_BROWSER_MAX_WIDTH,
   FILE_BROWSER_MIN_WIDTH,
@@ -33,7 +35,8 @@ import {
   setCurrentProvider,
   setMessages,
   setSessions,
-  setSessionsLoading
+  setSessionsLoading,
+  setSessionsTotal
 } from '../store/session'
 import { openUpdatesWindow, startUpdatePoller, stopUpdatePoller } from '../store/updates'
 
@@ -46,10 +49,10 @@ import {
   PREVIEW_RAIL_PANE_WIDTH
 } from './chat/right-rail'
 import { ChatSidebar } from './chat/sidebar'
-import { FileBrowserPane } from './file-browser'
 import { useGatewayBoot } from './gateway/hooks/use-gateway-boot'
 import { useGatewayRequest } from './gateway/hooks/use-gateway-request'
 import { ModelPickerOverlay } from './model-picker-overlay'
+import { RightSidebarPane } from './right-sidebar'
 import { NEW_CHAT_ROUTE, routeSessionId, sessionRoute } from './routes'
 import { useContextSuggestions } from './session/hooks/use-context-suggestions'
 import { useCwdActions } from './session/hooks/use-cwd-actions'
@@ -182,10 +185,12 @@ export function DesktopController() {
     setSessionsLoading(true)
 
     try {
-      const result = await listSessions(50)
+      const limit = $sessionsLimit.get()
+      const result = await listSessions(limit)
 
       if (refreshSessionsRequestRef.current === requestId) {
         setSessions(result.sessions)
+        setSessionsTotal(typeof result.total === 'number' ? result.total : result.sessions.length)
       }
     } finally {
       if (refreshSessionsRequestRef.current === requestId) {
@@ -193,6 +198,11 @@ export function DesktopController() {
       }
     }
   }, [])
+
+  const loadMoreSessions = useCallback(() => {
+    bumpSessionsLimit()
+    void refreshSessions()
+  }, [refreshSessions])
 
   const toggleSelectedPin = useCallback(() => {
     const sessionId = $selectedStoredSessionId.get()
@@ -210,10 +220,27 @@ export function DesktopController() {
 
   const { gatewayLogLines, inferenceStatus, statusSnapshot } = useStatusSnapshot(gatewayState, requestGateway)
 
-  const { browseSessionCwd, changeSessionCwd, refreshProjectBranch } = useCwdActions({
+  const updateActiveSessionRuntimeInfo = useCallback(
+    (info: { branch?: string; cwd?: string }) => {
+      const sessionId = activeSessionIdRef.current
+
+      if (!sessionId) {
+        return
+      }
+
+      updateSessionState(sessionId, state => ({
+        ...state,
+        branch: info.branch ?? state.branch,
+        cwd: info.cwd ?? state.cwd
+      }))
+    },
+    [activeSessionIdRef, updateSessionState]
+  )
+
+  const { changeSessionCwd, refreshProjectBranch } = useCwdActions({
     activeSessionId,
     activeSessionIdRef,
-    currentCwd,
+    onSessionRuntimeInfo: updateActiveSessionRuntimeInfo,
     requestGateway
   })
 
@@ -253,7 +280,7 @@ export function DesktopController() {
             runtimeSessionId,
             state => ({
               ...state,
-              messages: toChatMessages(latest.messages)
+              messages: preserveLocalAssistantErrors(toChatMessages(latest.messages), state.messages)
             }),
             storedSessionId
           )
@@ -314,6 +341,31 @@ export function DesktopController() {
     syncSessionStateToView,
     updateSessionState
   })
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+
+      const editing =
+        target?.isContentEditable ||
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+
+      if (editing || event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey) {
+        return
+      }
+
+      if (event.shiftKey && event.code === 'KeyN') {
+        event.preventDefault()
+        startFreshSessionDraft()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [startFreshSessionDraft])
 
   const composer = useComposerActions({
     activeSessionId,
@@ -388,7 +440,6 @@ export function DesktopController() {
 
   const { leftStatusbarItems, statusbarItems } = useStatusbarItems({
     agentsOpen,
-    browseSessionCwd,
     commandCenterOpen,
     extraLeftItems: statusbarItemGroups.flat.left,
     extraRightItems: statusbarItemGroups.flat.right,
@@ -405,8 +456,8 @@ export function DesktopController() {
     <ChatSidebar
       currentView={currentView}
       onDeleteSession={sessionId => void removeSession(sessionId)}
+      onLoadMoreSessions={loadMoreSessions}
       onNavigate={selectSidebarItem}
-      onRefreshSessions={() => void refreshSessions()}
       onResumeSession={sessionId => navigate(sessionRoute(sessionId))}
     />
   )
@@ -497,8 +548,10 @@ export function DesktopController() {
 
   return (
     <AppShell
+      commandCenterOpen={commandCenterOpen}
       leftStatusbarItems={leftStatusbarItems}
       leftTitlebarTools={titlebarToolGroups.flat.left}
+      onOpenSearch={() => openCommandCenterSection('sessions')}
       onOpenSettings={openSettings}
       overlays={overlays}
       statusbarItems={statusbarItems}
@@ -521,7 +574,7 @@ export function DesktopController() {
           <Route
             element={
               <Suspense fallback={null}>
-                <SkillsView setStatusbarItemGroup={setStatusbarItemGroup} setTitlebarToolGroup={setTitlebarToolGroup} />
+                <SkillsView setStatusbarItemGroup={setStatusbarItemGroup} />
               </Suspense>
             }
             path="skills"
@@ -529,10 +582,7 @@ export function DesktopController() {
           <Route
             element={
               <Suspense fallback={null}>
-                <MessagingView
-                  setStatusbarItemGroup={setStatusbarItemGroup}
-                  setTitlebarToolGroup={setTitlebarToolGroup}
-                />
+                <MessagingView setStatusbarItemGroup={setStatusbarItemGroup} />
               </Suspense>
             }
             path="messaging"
@@ -540,10 +590,7 @@ export function DesktopController() {
           <Route
             element={
               <Suspense fallback={null}>
-                <ArtifactsView
-                  setStatusbarItemGroup={setStatusbarItemGroup}
-                  setTitlebarToolGroup={setTitlebarToolGroup}
-                />
+                <ArtifactsView setStatusbarItemGroup={setStatusbarItemGroup} />
               </Suspense>
             }
             path="artifacts"
@@ -551,7 +598,7 @@ export function DesktopController() {
           <Route
             element={
               <Suspense fallback={null}>
-                <CronView setStatusbarItemGroup={setStatusbarItemGroup} setTitlebarToolGroup={setTitlebarToolGroup} />
+                <CronView setStatusbarItemGroup={setStatusbarItemGroup} />
               </Suspense>
             }
             path="cron"
@@ -590,6 +637,7 @@ export function DesktopController() {
       </Pane>
       <Pane
         defaultOpen={false}
+        disabled={!chatOpen}
         id="file-browser"
         maxWidth={FILE_BROWSER_MAX_WIDTH}
         minWidth={FILE_BROWSER_MIN_WIDTH}
@@ -597,7 +645,12 @@ export function DesktopController() {
         side="right"
         width={FILE_BROWSER_DEFAULT_WIDTH}
       >
-        <FileBrowserPane onActivateFile={composer.attachContextFilePath} onChangeCwd={changeSessionCwd} />
+        <RightSidebarPane
+          onActivateFile={composer.attachContextFilePath}
+          onActivateFolder={composer.attachContextFolderPath}
+          onAddTerminalSelection={composer.addTerminalSelectionAttachment}
+          onChangeCwd={changeSessionCwd}
+        />
       </Pane>
     </AppShell>
   )

@@ -1,8 +1,14 @@
 import { useCallback } from 'react'
 
+import { requestComposerFocus, requestComposerInsert } from '@/app/chat/composer/focus'
 import { formatRefValue } from '@/components/assistant-ui/directive-text'
 import { attachmentId, contextPath, pathLabel } from '@/lib/chat-runtime'
-import { addComposerAttachment, type ComposerAttachment, removeComposerAttachment } from '@/store/composer'
+import {
+  addComposerAttachment,
+  type ComposerAttachment,
+  removeComposerAttachment,
+  setComposerTerminalSelection
+} from '@/store/composer'
 import { notify, notifyError } from '@/store/notifications'
 
 import type { ImageDetachResponse } from '../../types'
@@ -180,19 +186,38 @@ interface ComposerActionsOptions {
   requestGateway: <T>(method: string, params?: Record<string, unknown>) => Promise<T>
 }
 
+/** Add to the main composer and focus it. All sidebar/picker/drop attach paths funnel through here. */
+const attachToMain = (attachment: ComposerAttachment) => {
+  addComposerAttachment(attachment)
+  requestComposerFocus('main')
+}
+
 export function useComposerActions({ activeSessionId, currentCwd, requestGateway }: ComposerActionsOptions) {
+  const addTextToDraft = useCallback((text: string) => {
+    requestComposerInsert(text, { mode: 'block' })
+  }, [])
+
+  const addTerminalSelectionAttachment = useCallback((text: string, label = 'selection') => {
+    const trimmed = text.trim()
+    const normalizedLabel = label.trim() || 'selection'
+    const refText = `@terminal:${formatRefValue(normalizedLabel)}`
+
+    if (!trimmed) {
+      return
+    }
+
+    setComposerTerminalSelection(normalizedLabel, trimmed)
+    requestComposerInsert(refText, { mode: 'inline' })
+  }, [])
+
   const addContextRefAttachment = useCallback((refText: string, label?: string, detail?: string) => {
-    let kind: ComposerAttachment['kind'] = 'file'
+    const kind: ComposerAttachment['kind'] = refText.startsWith('@folder:')
+      ? 'folder'
+      : refText.startsWith('@url:')
+        ? 'url'
+        : 'file'
 
-    if (refText.startsWith('@folder:')) {
-      kind = 'folder'
-    }
-
-    if (refText.startsWith('@url:')) {
-      kind = 'url'
-    }
-
-    addComposerAttachment({
+    attachToMain({
       id: attachmentId(kind, refText),
       kind,
       label: label || refText.replace(/^@(file|folder|url):/, ''),
@@ -216,7 +241,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
       for (const path of paths) {
         const rel = contextPath(path, currentCwd)
 
-        addComposerAttachment({
+        attachToMain({
           id: attachmentId(kind, rel),
           kind,
           label: pathLabel(path),
@@ -237,7 +262,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
 
       const rel = contextPath(filePath, currentCwd)
 
-      addComposerAttachment({
+      attachToMain({
         id: attachmentId('file', rel),
         kind: 'file',
         label: pathLabel(filePath),
@@ -264,7 +289,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
       path: filePath
     }
 
-    addComposerAttachment(baseAttachment)
+    attachToMain(baseAttachment)
 
     try {
       const previewUrl = await window.hermesDesktop?.readFileDataUrl(filePath)
@@ -361,7 +386,7 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
 
       const rel = contextPath(folderPath, currentCwd)
 
-      addComposerAttachment({
+      attachToMain({
         id: attachmentId('folder', rel),
         kind: 'folder',
         label: pathLabel(folderPath),
@@ -482,7 +507,10 @@ export function useComposerActions({ activeSessionId, currentCwd, requestGateway
 
   return {
     addContextRefAttachment,
+    addTerminalSelectionAttachment,
+    addTextToDraft,
     attachContextFilePath,
+    attachContextFolderPath,
     attachDroppedItems,
     attachImageBlob,
     attachImagePath,

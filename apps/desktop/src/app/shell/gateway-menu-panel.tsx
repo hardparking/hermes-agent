@@ -42,11 +42,13 @@ export function GatewayMenuPanel({
   const gatewayOpen = gatewayState === 'open'
   const gatewayConnecting = gatewayState === 'connecting'
   const inferenceReady = gatewayOpen && inferenceStatus?.ready === true
+
   const connectionLabel = gatewayOpen
     ? 'Connected'
     : gatewayConnecting
       ? 'Connecting'
       : prettyState(gatewayState || 'offline')
+
   const inferenceLabel = gatewayOpen
     ? inferenceStatus?.ready
       ? 'Inference ready'
@@ -54,6 +56,7 @@ export function GatewayMenuPanel({
         ? 'Inference not ready'
         : 'Checking inference'
     : 'Disconnected'
+
   const platforms = Object.entries(statusSnapshot?.gateway_platforms || {}).sort(([l], [r]) => l.localeCompare(r))
   const recentLogs = logLines.slice(-5)
 

@@ -58,16 +58,16 @@ export function AppearanceSettings() {
 
   return (
     <SettingsContent>
-      <div className="space-y-7">
+      <div className="space-y-5">
         <div>
           <SectionHeading icon={Palette} title="Appearance" />
-          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+          <p className="max-w-2xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
             These are desktop-only display preferences. Mode controls brightness; theme controls the accent palette and
             chat surface styling.
           </p>
         </div>
 
-        <section className="rounded-2xl border border-border/50 bg-card/55 p-4 shadow-sm">
+        <section className="rounded-xl border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background) p-3 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">Color Mode</div>
@@ -84,8 +84,8 @@ export function AppearanceSettings() {
               return (
                 <button
                   className={cn(
-                    'group rounded-xl border border-border/45 bg-background/55 p-3 text-left transition hover:border-primary/35 hover:bg-accent/45',
-                    active && 'border-primary/65 bg-primary/8 ring-2 ring-primary/25'
+                    'group rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-2.5 text-left transition hover:bg-(--chrome-action-hover)',
+                    active && 'border-(--ui-stroke-secondary) bg-(--ui-bg-tertiary)'
                   )}
                   key={id}
                   onClick={() => {
@@ -104,15 +104,17 @@ export function AppearanceSettings() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-3 text-sm font-medium">{label}</div>
-                  <div className="mt-1 text-xs leading-5 text-muted-foreground">{description}</div>
+                  <div className="mt-2 text-[length:var(--conversation-text-font-size)] font-medium">{label}</div>
+                  <div className="mt-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+                    {description}
+                  </div>
                 </button>
               )
             })}
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border/50 bg-card/55 p-4 shadow-sm">
+        <section className="rounded-xl border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background) p-3 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">Tool Call Display</div>
@@ -142,8 +144,8 @@ export function AppearanceSettings() {
               return (
                 <button
                   className={cn(
-                    'group rounded-xl border border-border/45 bg-background/55 p-3 text-left transition hover:border-primary/35 hover:bg-accent/45',
-                    active && 'border-primary/65 bg-primary/8 ring-2 ring-primary/25'
+                    'group rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-2.5 text-left transition hover:bg-(--chrome-action-hover)',
+                    active && 'border-(--ui-stroke-secondary) bg-(--ui-bg-tertiary)'
                   )}
                   key={option.id}
                   onClick={() => {
@@ -153,21 +155,23 @@ export function AppearanceSettings() {
                   type="button"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="text-sm font-medium">{option.label}</div>
+                    <div className="text-[length:var(--conversation-text-font-size)] font-medium">{option.label}</div>
                     {active && (
                       <span className="grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
                         <Check className="size-3.5" />
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 text-xs leading-5 text-muted-foreground">{option.description}</div>
+                  <div className="mt-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+                    {option.description}
+                  </div>
                 </button>
               )
             })}
           </div>
         </section>
 
-        <section className="rounded-2xl border border-border/50 bg-card/55 p-4 shadow-sm">
+        <section className="rounded-xl border border-(--ui-stroke-tertiary) bg-(--ui-chat-bubble-background) p-3 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-medium">Theme</div>
@@ -184,8 +188,8 @@ export function AppearanceSettings() {
               return (
                 <button
                   className={cn(
-                    'rounded-2xl border border-border/45 bg-background/50 p-2.5 text-left transition hover:border-primary/35 hover:bg-accent/35',
-                    active && 'border-primary/65 bg-primary/8 ring-2 ring-primary/25'
+                    'rounded-lg border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) p-2 text-left transition hover:bg-(--chrome-action-hover)',
+                    active && 'border-(--ui-stroke-secondary) bg-(--ui-bg-tertiary)'
                   )}
                   key={theme.name}
                   onClick={() => {
@@ -197,8 +201,10 @@ export function AppearanceSettings() {
                   <ThemePreview name={theme.name} />
                   <div className="mt-3 flex items-start justify-between gap-3 px-1">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{theme.label}</div>
-                      <div className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                      <div className="truncate text-[length:var(--conversation-text-font-size)] font-medium">
+                        {theme.label}
+                      </div>
+                      <div className="mt-0.5 line-clamp-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
                         {theme.description}
                       </div>
                     </div>

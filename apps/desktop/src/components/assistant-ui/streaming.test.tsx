@@ -51,6 +51,34 @@ vi.stubGlobal('cancelAnimationFrame', (id: number) => window.clearTimeout(id))
 
 Element.prototype.scrollTo = function scrollTo() {}
 
+Element.prototype.animate = function animate() {
+  return {
+    cancel: () => {},
+    finished: Promise.resolve()
+  } as unknown as Animation
+}
+
+// jsdom returns 0 for offset*; the virtualizer reads those to size its
+// viewport. Fall through to client* (which tests can override) or a sane
+// default so virtualized items render.
+function stubOffsetDimension(
+  prop: 'offsetHeight' | 'offsetWidth',
+  clientProp: 'clientHeight' | 'clientWidth',
+  fallback: number
+) {
+  const previous = Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop)
+
+  Object.defineProperty(HTMLElement.prototype, prop, {
+    configurable: true,
+    get() {
+      return previous?.get?.call(this) || (this as HTMLElement)[clientProp] || fallback
+    }
+  })
+}
+
+stubOffsetDimension('offsetWidth', 'clientWidth', 800)
+stubOffsetDimension('offsetHeight', 'clientHeight', 600)
+
 async function wait(ms: number) {
   await act(async () => {
     await new Promise(resolve => window.setTimeout(resolve, ms))
@@ -74,6 +102,23 @@ function assistantMessage(text: string, running = true): ThreadMessage {
     role: 'assistant',
     content: [{ type: 'text', text }],
     status: running ? { type: 'running' } : { type: 'complete', reason: 'stop' },
+    createdAt,
+    metadata: {
+      unstable_state: null,
+      unstable_annotations: [],
+      unstable_data: [],
+      steps: [],
+      custom: {}
+    }
+  } as ThreadMessage
+}
+
+function assistantErrorMessage(error: string): ThreadMessage {
+  return {
+    id: 'assistant-error-1',
+    role: 'assistant',
+    content: [],
+    status: { type: 'incomplete', reason: 'error', error },
     createdAt,
     metadata: {
       unstable_state: null,
@@ -232,6 +277,20 @@ function TodoHarness({ message }: { message: ThreadMessage }) {
   )
 }
 
+function MessageHarness({ message }: { message: ThreadMessage }) {
+  const runtime = useExternalStoreRuntime<ThreadMessage>({
+    messages: [message],
+    isRunning: false,
+    onNew: async () => {}
+  })
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <Thread />
+    </AssistantRuntimeProvider>
+  )
+}
+
 function ReasoningHarness() {
   const runtime = useExternalStoreRuntime<ThreadMessage>({
     messages: [assistantReasoningMessage(' The user is asking what this file is.')],
@@ -309,6 +368,12 @@ describe('assistant-ui streaming renderer', () => {
     const { container } = render(<IntroHarness />)
 
     expect(container.querySelector('[data-slot="aui_composer-clearance"]')).toBeNull()
+  })
+
+  it('renders assistant provider errors inline', () => {
+    render(<MessageHarness message={assistantErrorMessage('OpenRouter rejected the request (403).')} />)
+
+    expect(screen.getByRole('alert').textContent).toContain('OpenRouter rejected the request (403).')
   })
 
   it('does not pull the viewport back down after the user scrolls up during streaming', async () => {

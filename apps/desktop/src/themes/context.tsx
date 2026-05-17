@@ -148,6 +148,17 @@ function renderedModeFor(colors: DesktopThemeColors, mode: 'light' | 'dark'): 'l
 
 // ─── CSS application ────────────────────────────────────────────────────────
 
+// Per-mode mix knobs. Light/dark fallbacks live in styles.css `:root` /
+// `:root.dark`; setting them inline keeps active-skin overrides surviving
+// the boot-time paint.
+const mixesFor = (isDark: boolean): Record<string, string> => ({
+  '--theme-mix-chrome': isDark ? '74%' : '92%',
+  '--theme-mix-sidebar': '100%',
+  '--theme-mix-card': isDark ? '38%' : '22%',
+  '--theme-mix-elevated': isDark ? '46%' : '28%',
+  '--theme-mix-bubble': isDark ? '46%' : '0%'
+})
+
 function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark') {
   if (typeof document === 'undefined') {
     return
@@ -157,44 +168,54 @@ function applyTheme(theme: DesktopTheme, mode: 'light' | 'dark') {
   const c = theme.colors
   const typo = { ...DEFAULT_TYPOGRAPHY, ...nousTheme.typography, ...theme.typography }
   const rendered = renderedModeFor(c, mode)
+  const isDark = rendered === 'dark'
   const midground = c.midground ?? c.ring
   const skinName = theme.name.endsWith(`-${mode}`) ? theme.name.slice(0, -mode.length - 1) : theme.name
 
   root.style.setProperty('color-scheme', rendered)
   root.dataset.hermesTheme = skinName
   root.dataset.hermesMode = rendered
-  root.classList.toggle('dark', rendered === 'dark')
+  root.classList.toggle('dark', isDark)
 
-  const set = (k: string, v: string) => root.style.setProperty(k, v)
-  set('--dt-background', c.background)
-  set('--dt-foreground', c.foreground)
-  set('--dt-card', c.card)
-  set('--dt-card-foreground', c.cardForeground)
-  set('--dt-muted', c.muted)
-  set('--dt-muted-foreground', c.mutedForeground)
-  set('--dt-popover', c.popover)
-  set('--dt-popover-foreground', c.popoverForeground)
-  set('--dt-primary', c.primary)
-  set('--dt-primary-foreground', c.primaryForeground)
-  set('--dt-secondary', c.secondary)
-  set('--dt-secondary-foreground', c.secondaryForeground)
-  set('--dt-accent', c.accent)
-  set('--dt-accent-foreground', c.accentForeground)
-  set('--dt-border', c.border)
-  set('--dt-input', c.input)
-  set('--dt-ring', c.ring)
-  set('--dt-midground', midground)
-  set('--dt-midground-foreground', c.midgroundForeground ?? readableOn(midground))
-  set('--dt-composer-ring', c.composerRing ?? midground)
-  set('--dt-destructive', c.destructive)
-  set('--dt-destructive-foreground', c.destructiveForeground)
-  set('--dt-sidebar-bg', c.sidebarBackground ?? c.background)
-  set('--dt-sidebar-border', c.sidebarBorder ?? c.border)
-  set('--dt-user-bubble', c.userBubble ?? c.muted)
-  set('--dt-user-bubble-border', c.userBubbleBorder ?? c.border)
-  set('--dt-font-sans', typo.fontSans)
-  set('--dt-font-mono', typo.fontMono)
-  set('--noise-opacity-mul', rendered === 'dark' ? 'calc(0.04 / 0.21)' : 'calc(0.34 / 0.21)')
+  // Brand seeds feed every glass + shadcn token via `color-mix()` in styles.css.
+  const seeds: Record<string, string> = {
+    '--theme-foreground': c.foreground,
+    '--theme-primary': c.primary,
+    '--theme-secondary': c.secondary,
+    '--theme-accent-soft': c.accent,
+    '--theme-midground': midground,
+    '--theme-warm': c.primary,
+    '--theme-background-seed': c.background,
+    '--theme-sidebar-seed': c.sidebarBackground ?? c.background,
+    '--theme-card-seed': c.card,
+    '--theme-elevated-seed': c.popover,
+    '--theme-bubble-seed': c.userBubble ?? c.popover
+  }
+
+  // shadcn/Tailwind tokens that aren't derived from the seed chain.
+  const palette: Record<string, string> = {
+    '--dt-primary-foreground': c.primaryForeground,
+    '--dt-secondary-foreground': c.secondaryForeground,
+    '--dt-accent-foreground': c.accentForeground,
+    '--dt-border': c.border,
+    '--dt-input': c.input,
+    '--dt-ring': c.ring,
+    '--dt-muted': c.muted,
+    '--dt-midground-foreground': c.midgroundForeground ?? readableOn(midground),
+    '--dt-composer-ring': c.composerRing ?? midground,
+    '--dt-destructive': c.destructive,
+    '--dt-destructive-foreground': c.destructiveForeground,
+    '--dt-sidebar-border': c.sidebarBorder ?? c.border,
+    '--dt-user-bubble-border': c.userBubbleBorder ?? c.border,
+    '--dt-font-sans': typo.fontSans,
+    '--dt-font-mono': typo.fontMono,
+    '--noise-opacity-mul': isDark ? 'calc(0.04 / 0.21)' : 'calc(0.34 / 0.21)'
+  }
+
+  for (const [k, v] of Object.entries({ ...seeds, ...mixesFor(isDark), ...palette })) {
+    root.style.setProperty(k, v)
+  }
+
   window.hermesDesktop?.setTitleBarTheme?.({
     background: c.background,
     foreground: c.foreground

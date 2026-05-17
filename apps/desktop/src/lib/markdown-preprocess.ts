@@ -310,7 +310,9 @@ const LATEX_INLINE_RE = /\\\(([^\n]+?)\\\)/g
 const LATEX_DISPLAY_RE = /\\\[([\s\S]+?)\\\]/g
 
 function rewriteLatexBracketDelimiters(text: string): string {
-  return text.replace(LATEX_INLINE_RE, (_, body: string) => `$${body}$`).replace(LATEX_DISPLAY_RE, (_, body: string) => `$$${body}$$`)
+  return text
+    .replace(LATEX_INLINE_RE, (_, body: string) => `$${body}$`)
+    .replace(LATEX_DISPLAY_RE, (_, body: string) => `$$${body}$$`)
 }
 
 // Escape `$<digit>` patterns so they don't get eaten as math delimiters.
@@ -340,14 +342,19 @@ export function preprocessMarkdown(text: string): string {
     .split(CODE_FENCE_SPLIT_RE)
     .map(part => {
       // Fence blocks pass through untouched.
-      if (/^(?:```|~~~)/.test(part)) {return part}
+      if (/^(?:```|~~~)/.test(part)) {
+        return part
+      }
 
       // Whitespace-only segments (e.g. the `\n\n` between two adjacent
       // fences) must NOT go through stripPreviewTargets — its internal
       // .trim() would collapse them to '' and glue the surrounding
       // fences together, producing things like ``````math which the
       // markdown parser then reads as a single 6-backtick block.
-      if (!part.trim()) {return part}
+      if (!part.trim()) {
+        return part
+      }
+
       // Preserve leading/trailing whitespace around the prose body so
       // that fence-prose-fence sequences keep their blank-line gaps.
       // stripPreviewTargets internally calls .trim() on its result for

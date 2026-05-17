@@ -1055,6 +1055,10 @@ async def get_sessions(limit: int = 20, offset: int = 0, min_messages: int = 0):
             total = db.session_count(min_message_count=min_message_count)
             now = time.time()
             for s in sessions:
+                # Return only persisted per-session cwd from SessionDB.
+                # Falling back to process-level terminal.cwd causes historical
+                # sessions to "teleport" between workspaces as config changes.
+                s["cwd"] = s.get("cwd") or None
                 s["is_active"] = (
                     s.get("ended_at") is None
                     and (now - s.get("last_active", s.get("started_at", 0))) < 300

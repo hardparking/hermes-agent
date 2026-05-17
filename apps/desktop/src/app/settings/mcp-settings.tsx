@@ -1,13 +1,13 @@
+import { useStore } from '@nanostores/react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { OverlayActionButton, OverlayCard } from '@/app/overlays/overlay-chrome'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { getHermesConfigRecord, saveHermesConfig, type HermesGateway } from '@/hermes'
+import { getHermesConfigRecord, type HermesGateway, saveHermesConfig } from '@/hermes'
 import { Package, Wrench } from '@/lib/icons'
 import { notify, notifyError } from '@/store/notifications'
 import { $activeSessionId } from '@/store/session'
-import { useStore } from '@nanostores/react'
 import type { HermesConfigRecord } from '@/types/hermes'
 
 import { includesQuery } from './helpers'
@@ -64,7 +64,10 @@ export function McpSettings({ gateway, onConfigSaved, query }: McpSettingsProps)
 
     getHermesConfigRecord()
       .then(next => {
-        if (cancelled) return
+        if (cancelled) {
+          return
+        }
+
         setConfig(next)
         const first = Object.keys(getServers(next)).sort()[0] ?? null
         setSelected(first)
@@ -76,6 +79,7 @@ export function McpSettings({ gateway, onConfigSaved, query }: McpSettingsProps)
 
   const servers = useMemo(() => getServers(config), [config])
   const names = useMemo(() => Object.keys(servers).sort(), [servers])
+
   const filtered = useMemo(
     () => names.filter(serverName => serverMatches(serverName, servers[serverName], query.trim().toLowerCase())),
     [names, query, servers]
@@ -97,6 +101,7 @@ export function McpSettings({ gateway, onConfigSaved, query }: McpSettingsProps)
 
     if (!nextName) {
       notify({ kind: 'error', title: 'Name required', message: 'Give this MCP server a config key.' })
+
       return
     }
 
@@ -112,6 +117,7 @@ export function McpSettings({ gateway, onConfigSaved, query }: McpSettingsProps)
       parsed = raw as Record<string, unknown>
     } catch (err) {
       notifyError(err, 'Invalid MCP JSON')
+
       return
     }
 
@@ -161,6 +167,7 @@ export function McpSettings({ gateway, onConfigSaved, query }: McpSettingsProps)
   const reloadMcp = async () => {
     if (!gateway) {
       notify({ kind: 'warning', title: 'Gateway unavailable', message: 'Reconnect the gateway before reloading MCP.' })
+
       return
     }
 

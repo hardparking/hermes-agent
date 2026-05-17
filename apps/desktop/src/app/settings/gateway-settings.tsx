@@ -45,22 +45,24 @@ function ModeCard({
   return (
     <button
       className={cn(
-        'rounded-2xl border p-4 text-left transition',
+        'rounded-xl border p-3 text-left transition',
         active
-          ? 'border-primary bg-primary/10 ring-2 ring-primary/15'
-          : 'border-border bg-background/60 hover:bg-muted/40',
+          ? 'border-(--ui-stroke-secondary) bg-(--ui-bg-tertiary)'
+          : 'border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) hover:bg-(--chrome-action-hover)',
         disabled && 'cursor-not-allowed opacity-50'
       )}
       disabled={disabled}
       onClick={onSelect}
       type="button"
     >
-      <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="flex items-center gap-2 text-[length:var(--conversation-text-font-size)] font-medium">
         <Icon className="size-4 text-muted-foreground" />
         <span>{title}</span>
         {active ? <Check className="ml-auto size-4 text-primary" /> : null}
       </div>
-      <p className="mt-2 text-xs leading-5 text-muted-foreground">{description}</p>
+      <p className="mt-1.5 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+        {description}
+      </p>
     </button>
   )
 }
@@ -191,20 +193,20 @@ export function GatewaySettings() {
 
   return (
     <SettingsContent>
-      <div className="mb-6">
-        <div className="flex items-center gap-2 text-sm font-medium">
+      <div className="mb-5">
+        <div className="flex items-center gap-2 text-[length:var(--conversation-text-font-size)] font-medium">
           <Globe className="size-4 text-muted-foreground" />
           Gateway Connection
           {state.envOverride ? <Pill tone="primary">env override</Pill> : null}
         </div>
-        <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground">
+        <p className="mt-2 max-w-2xl text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
           Hermes Desktop starts its own local gateway by default. Use a remote gateway when you want this app to control
           an already-running Hermes backend on another machine or behind a trusted proxy.
         </p>
       </div>
 
       {state.envOverride ? (
-        <div className="mb-5 flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive">
+        <div className="mb-5 flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-[length:var(--conversation-caption-font-size)] text-destructive">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <div>
             <div className="font-medium">Environment variables are controlling this desktop session.</div>

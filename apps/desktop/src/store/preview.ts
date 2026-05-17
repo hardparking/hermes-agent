@@ -400,6 +400,15 @@ export function closeRightRailTab(tabId: RightRailTabId) {
 
 export const closeActiveRightRailTab = () => closeRightRailTab($rightRailActiveTabId.get())
 
+/** Dismisses the active preview + every file tab so the rail pane unmounts. */
+export function closeRightRail() {
+  if ($previewTarget.get()) {
+    dismissPreviewTarget()
+  }
+
+  $filePreviewTabs.set([])
+}
+
 export function clearSessionPreviewRegistry() {
   $sessionPreviewRegistry.set({})
   setPreviewTarget(null)

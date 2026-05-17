@@ -222,6 +222,7 @@ export interface SessionCreateResponse {
 }
 
 export interface SessionInfo {
+  cwd?: null | string
   ended_at: null | number
   id: string
   input_tokens: number

@@ -36,12 +36,7 @@ function statusGlyph(status: SubagentStatus): ReactNode {
     return <AlertCircle aria-label="Failed" className="size-3.5 shrink-0 text-destructive" />
   }
 
-  return (
-    <CheckCircle2
-      aria-label="Done"
-      className="size-3.5 shrink-0 text-emerald-600/85 dark:text-emerald-400/85"
-    />
-  )
+  return <CheckCircle2 aria-label="Done" className="size-3.5 shrink-0 text-emerald-600/85 dark:text-emerald-400/85" />
 }
 
 const STREAM_TONE: Record<SubagentStreamEntry['kind'], string> = {
@@ -65,7 +60,11 @@ function streamGlyph(entry: SubagentStreamEntry): ReactNode {
   }
 
   if (entry.kind === 'thinking') {
-    return <span aria-hidden className="font-mono text-[0.7rem] leading-none text-muted-foreground/70">…</span>
+    return (
+      <span aria-hidden className="font-mono text-[0.7rem] leading-none text-muted-foreground/70">
+        …
+      </span>
+    )
   }
 
   return <span aria-hidden className="mt-0.5 size-1 shrink-0 rounded-full bg-muted-foreground/55" />
@@ -103,8 +102,13 @@ export function AgentsView({ onClose }: AgentsViewProps) {
 }
 
 const fmtDuration = (seconds?: number) => {
-  if (!seconds || seconds <= 0) return ''
-  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  if (!seconds || seconds <= 0) {
+    return ''
+  }
+
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)}s`
+  }
 
   const m = Math.floor(seconds / 60)
   const s = Math.round(seconds % 60)
@@ -113,18 +117,29 @@ const fmtDuration = (seconds?: number) => {
 }
 
 const fmtTokens = (value?: number) => {
-  if (!value) return ''
+  if (!value) {
+    return ''
+  }
 
   return value >= 1000 ? `${(value / 1000).toFixed(1)}k tok` : `${value} tok`
 }
 
 const fmtAge = (updatedAt: number, nowMs: number) => {
   const s = Math.max(0, Math.round((nowMs - updatedAt) / 1000))
-  if (s < 2) return 'now'
-  if (s < 60) return `${s}s ago`
+
+  if (s < 2) {
+    return 'now'
+  }
+
+  if (s < 60) {
+    return `${s}s ago`
+  }
 
   const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
+
+  if (m < 60) {
+    return `${m}m ago`
+  }
 
   return `${Math.floor(m / 60)}h ago`
 }
@@ -152,12 +167,14 @@ function groupDelegations(roots: readonly SubagentNode[]): RootGroup[] {
 
     if (prev && sameShape && closeInTime && uniqueStep) {
       prev.nodes.push(node)
+
       continue
     }
 
     if (node.taskCount > 1) {
       n += 1
       groups.push({ id: `delegation-${n}`, label: `Delegation ${n}`, nodes: [node], taskCount: node.taskCount })
+
       continue
     }
 
@@ -180,7 +197,9 @@ function SubagentTree({ tree }: { tree: SubagentNode[] }) {
   const cost = flat.reduce((sum, n) => sum + (n.costUsd ?? 0), 0)
 
   useEffect(() => {
-    if (active <= 0 || typeof window === 'undefined') return
+    if (active <= 0 || typeof window === 'undefined') {
+      return
+    }
 
     const id = window.setInterval(() => setNowMs(Date.now()), 500)
 
@@ -261,10 +280,7 @@ function StreamLine({
   const tone = entry.isError ? 'text-destructive' : STREAM_TONE[entry.kind]
 
   return (
-    <div
-      className="flex min-w-0 items-baseline gap-2 text-[0.72rem] leading-relaxed"
-      ref={enterRef}
-    >
+    <div className="flex min-w-0 items-baseline gap-2 text-[0.72rem] leading-relaxed" ref={enterRef}>
       <span className="flex h-[0.95rem] shrink-0 items-center">{streamGlyph(entry)}</span>
       <span className={cn('min-w-0 flex-1 wrap-anywhere', tone, isMono && 'font-mono text-[0.69rem]')}>
         {entry.text}
@@ -283,13 +299,17 @@ function StreamLine({
 function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: number; nowMs: number }) {
   const running = node.status === 'running' || node.status === 'queued'
   const elapsed = useElapsedSeconds(running, `subagent:${node.id}`)
+
   const durationSeconds =
     typeof node.durationSeconds === 'number' ? Math.max(0, Math.round(node.durationSeconds)) : elapsed
+
   const [open, setOpen] = useState(() => running || depth < 2)
   const enterRef = useEnterAnimation(true, `subagent-row:${node.id}`)
 
   useEffect(() => {
-    if (running) setOpen(true)
+    if (running) {
+      setOpen(true)
+    }
   }, [running])
 
   const visibleRows = open ? node.stream.slice(-10) : node.stream.slice(-2)
@@ -304,11 +324,7 @@ function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: n
   ].filter(Boolean)
 
   return (
-    <div
-      className={cn('grid min-w-0 max-w-full gap-2', depth > 0 && 'pl-4')}
-      data-slot="tool-block"
-      ref={enterRef}
-    >
+    <div className={cn('grid min-w-0 max-w-full gap-2', depth > 0 && 'pl-4')} data-slot="tool-block" ref={enterRef}>
       <button
         aria-expanded={open}
         className="group flex w-full min-w-0 items-start gap-2.5 text-left"
@@ -374,4 +390,3 @@ function SubagentRow({ node, depth = 0, nowMs }: { node: SubagentNode; depth?: n
     </div>
   )
 }
-

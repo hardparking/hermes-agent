@@ -323,7 +323,7 @@ export function ChatSidebar({ channel, className }: ChatSidebarProps) {
                 <ChevronDown className="opacity-60" />
               ) : undefined
             }
-            className="self-start min-w-0 px-0 py-0 normal-case tracking-normal text-sm font-medium hover:underline disabled:no-underline"
+            className="self-start min-w-0 px-0 py-0 normal-case tracking-normal text-sm font-medium underline-offset-4 decoration-current/40 hover:underline disabled:no-underline"
             title={info.model ?? "switch model"}
           >
             <span className="truncate">{modelLabel}</span>

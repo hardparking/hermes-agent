@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageLoader } from '@/components/page-loader'
 import { StatusDot, type StatusTone } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
+import { DisclosureCaret } from '@/components/ui/disclosure-caret'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -12,18 +13,16 @@ import {
   type MessagingPlatformInfo,
   updateMessagingPlatform
 } from '@/hermes'
-import { AlertTriangle, ChevronDown, ExternalLink, RefreshCw, Save, Trash2 } from '@/lib/icons'
+import { AlertTriangle, ExternalLink, Save, Trash2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 
 import { useRouteEnumParam } from '../hooks/use-route-enum-param'
+import { PageSearchShell } from '../page-search-shell'
 import type { SetStatusbarItemGroup } from '../shell/statusbar-controls'
-import { titlebarHeaderBaseClass } from '../shell/titlebar'
-import type { SetTitlebarToolGroup } from '../shell/titlebar-controls'
 
 interface MessagingViewProps extends React.ComponentProps<'section'> {
   setStatusbarItemGroup?: SetStatusbarItemGroup
-  setTitlebarToolGroup?: SetTitlebarToolGroup
 }
 
 type EditMap = Record<string, Record<string, string>>
@@ -207,13 +206,10 @@ function fieldCopy(field: MessagingEnvVarInfo) {
   }
 }
 
-export function MessagingView({
-  setStatusbarItemGroup: _setStatusbarItemGroup,
-  setTitlebarToolGroup,
-  ...props
-}: MessagingViewProps) {
+export function MessagingView({ setStatusbarItemGroup: _setStatusbarItemGroup, ...props }: MessagingViewProps) {
   const [platforms, setPlatforms] = useState<MessagingPlatformInfo[] | null>(null)
   const [edits, setEdits] = useState<EditMap>({})
+  const [query, setQuery] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState<string | null>(null)
   const platformIds = useMemo(() => platforms?.map(p => p.id) ?? [], [platforms])
@@ -263,24 +259,6 @@ export function MessagingView({
     }
   }, [refreshPlatforms])
 
-  useEffect(() => {
-    if (!setTitlebarToolGroup) {
-      return
-    }
-
-    setTitlebarToolGroup('messaging', [
-      {
-        disabled: refreshing,
-        icon: <RefreshCw className={cn(refreshing && 'animate-spin')} />,
-        id: 'refresh-messaging',
-        label: refreshing ? 'Refreshing messaging' : 'Refresh messaging',
-        onSelect: () => void refreshPlatforms()
-      }
-    ])
-
-    return () => setTitlebarToolGroup('messaging', [])
-  }, [refreshPlatforms, refreshing, setTitlebarToolGroup])
-
   const selected = useMemo(() => {
     if (!platforms) {
       return null
@@ -289,7 +267,23 @@ export function MessagingView({
     return platforms.find(platform => platform.id === selectedId) || platforms[0] || null
   }, [platforms, selectedId])
 
-  const enabledCount = platforms?.filter(platform => platform.enabled).length || 0
+  const visiblePlatforms = useMemo(() => {
+    if (!platforms) {
+      return []
+    }
+
+    const q = query.trim().toLowerCase()
+
+    if (!q) {
+      return platforms
+    }
+
+    return platforms.filter(platform =>
+      [platform.id, platform.name, platform.description, platform.state]
+        .filter(Boolean)
+        .some(value => String(value).toLowerCase().includes(q))
+    )
+  }, [platforms, query])
 
   async function handleToggle(platform: MessagingPlatformInfo, enabled: boolean) {
     setSaving(`enabled:${platform.id}`)
@@ -367,58 +361,55 @@ export function MessagingView({
   }
 
   return (
-    <section {...props} className="flex h-full min-w-0 flex-col overflow-hidden rounded-b-[0.9375rem] bg-background">
-      <header className={titlebarHeaderBaseClass}>
-        <h2 className="pointer-events-auto text-base font-semibold leading-none tracking-tight">Messaging</h2>
-        <span className="pointer-events-auto text-xs text-muted-foreground">
-          {enabledCount === 0 ? 'No platforms enabled' : `${enabledCount} enabled`}
-        </span>
-      </header>
+    <PageSearchShell
+      {...props}
+      onSearchChange={setQuery}
+      searchPlaceholder="Search messaging..."
+      searchTrailingAction={null}
+      searchValue={query}
+    >
+      {!platforms ? (
+        <PageLoader label="Loading messaging platforms..." />
+      ) : (
+        <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)]">
+          <aside className="min-h-0 overflow-y-auto border-b border-(--ui-stroke-tertiary) p-2 lg:border-b-0 lg:border-r">
+            <ul className="space-y-1">
+              {visiblePlatforms.map(platform => (
+                <li key={platform.id}>
+                  <PlatformRow
+                    active={selected?.id === platform.id}
+                    onSelect={() => setSelectedId(platform.id)}
+                    platform={platform}
+                  />
+                </li>
+              ))}
+            </ul>
+          </aside>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-b-[1.0625rem] border border-border/50 bg-background/85">
-        {!platforms ? (
-          <PageLoader label="Loading messaging platforms..." />
-        ) : (
-          <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[16rem_minmax(0,1fr)]">
-            <aside className="min-h-0 overflow-y-auto border-b border-border/50 p-2 lg:border-b-0 lg:border-r">
-              <ul className="space-y-1">
-                {platforms.map(platform => (
-                  <li key={platform.id}>
-                    <PlatformRow
-                      active={selected?.id === platform.id}
-                      onSelect={() => setSelectedId(platform.id)}
-                      platform={platform}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </aside>
-
-            <main className="min-h-0 overflow-hidden">
-              {selected && (
-                <PlatformDetail
-                  edits={edits[selected.id] || {}}
-                  onClear={key => void handleClear(selected, key)}
-                  onEdit={(key, value) =>
-                    setEdits(current => ({
-                      ...current,
-                      [selected.id]: {
-                        ...(current[selected.id] || {}),
-                        [key]: value
-                      }
-                    }))
-                  }
-                  onSave={() => void handleSave(selected)}
-                  onToggle={enabled => void handleToggle(selected, enabled)}
-                  platform={selected}
-                  saving={saving}
-                />
-              )}
-            </main>
-          </div>
-        )}
-      </div>
-    </section>
+          <main className="min-h-0 overflow-hidden">
+            {selected && (
+              <PlatformDetail
+                edits={edits[selected.id] || {}}
+                onClear={key => void handleClear(selected, key)}
+                onEdit={(key, value) =>
+                  setEdits(current => ({
+                    ...current,
+                    [selected.id]: {
+                      ...(current[selected.id] || {}),
+                      [key]: value
+                    }
+                  }))
+                }
+                onSave={() => void handleSave(selected)}
+                onToggle={enabled => void handleToggle(selected, enabled)}
+                platform={selected}
+                saving={saving}
+              />
+            )}
+          </main>
+        </div>
+      )}
+    </PageSearchShell>
   )
 }
 
@@ -434,15 +425,17 @@ function PlatformRow({
   return (
     <button
       className={cn(
-        'flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors',
-        active ? 'bg-accent text-foreground' : 'text-foreground/85 hover:bg-accent/60'
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+        active
+          ? 'bg-(--ui-bg-tertiary) text-foreground'
+          : 'text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
       )}
       onClick={onSelect}
       type="button"
     >
       <PlatformAvatar platformId={platform.id} platformName={platform.name} />
       <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
-        <span className="truncate text-sm font-medium">{platform.name}</span>
+        <span className="truncate text-[length:var(--conversation-text-font-size)] font-normal">{platform.name}</span>
         <StatusDot tone={stateTone(platform)} />
       </span>
     </button>
@@ -453,8 +446,8 @@ function PlatformAvatar({ platformId, platformName }: { platformId: string; plat
   return (
     <span
       className={cn(
-        'inline-flex size-7 shrink-0 items-center justify-center rounded-md text-sm font-semibold',
-        PLATFORM_TINTS[platformId] || 'bg-muted text-muted-foreground'
+        'inline-flex size-6 shrink-0 items-center justify-center rounded-md text-[length:var(--conversation-caption-font-size)] font-medium',
+        PLATFORM_TINTS[platformId] || 'bg-(--ui-bg-tertiary) text-(--ui-text-tertiary)'
       )}
     >
       {platformName.charAt(0).toUpperCase()}
@@ -491,12 +484,14 @@ function PlatformDetail({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl space-y-7 px-6 py-6">
-          <header className="flex items-start gap-4">
+        <div className="mx-auto max-w-2xl space-y-5 px-5 py-4">
+          <header className="flex items-start gap-3">
             <PlatformAvatar platformId={platform.id} platformName={platform.name} />
             <div className="min-w-0 flex-1">
-              <h3 className="text-xl font-semibold tracking-tight">{platform.name}</h3>
-              <p className="mt-1 text-sm leading-6 text-muted-foreground">{platform.description}</p>
+              <h3 className="text-[0.9375rem] font-semibold tracking-tight">{platform.name}</h3>
+              <p className="mt-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+                {platform.description}
+              </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <StatePill tone={stateTone(platform)}>{stateLabel(platform.state)}</StatePill>
                 <SetupPill active={platform.configured}>
@@ -509,7 +504,7 @@ function PlatformDetail({
           </header>
 
           {platform.error_message && (
-            <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs leading-5 text-destructive">
+            <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>{platform.error_message}</span>
             </div>
@@ -517,7 +512,9 @@ function PlatformDetail({
 
           <section>
             <SectionTitle>Get your credentials</SectionTitle>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">{introCopy(platform)}</p>
+            <p className="mt-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
+              {introCopy(platform)}
+            </p>
             <div className="mt-3">
               <Button asChild size="sm" variant="outline">
                 <a href={platform.docs_url} rel="noreferrer" target="_blank">
@@ -543,7 +540,7 @@ function PlatformDetail({
                   />
                 ))
               ) : (
-                <p className="text-sm leading-6 text-muted-foreground">
+                <p className="text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
                   This platform does not need a token here. Use the setup guide above, then enable it below.
                 </p>
               )}
@@ -576,7 +573,7 @@ function PlatformDetail({
                 type="button"
               >
                 <span>Advanced ({hiddenCount})</span>
-                <ChevronDown className={cn('size-3.5 transition-transform', !showAdvanced && '-rotate-90')} />
+                <DisclosureCaret open={showAdvanced} size="0.875rem" />
               </button>
               {showAdvanced && (
                 <div className="mt-3 space-y-4">
@@ -597,9 +594,9 @@ function PlatformDetail({
         </div>
       </div>
 
-      <footer className="border-t border-border/50 bg-background/95 px-6 py-3 backdrop-blur">
+      <footer className="border-t border-(--ui-stroke-tertiary) bg-(--ui-chat-surface-background) px-5 py-2.5">
         <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2">
-          <label className="flex shrink-0 items-center gap-2 rounded-lg border border-border/50 bg-muted/25 px-3 py-1.5 text-sm">
+          <label className="flex shrink-0 items-center gap-2 rounded-md border border-(--ui-stroke-tertiary) bg-(--ui-bg-quinary) px-2.5 py-1.5 text-[length:var(--conversation-text-font-size)]">
             <Switch
               aria-label={platform.enabled ? `Disable ${platform.name}` : `Enable ${platform.name}`}
               checked={platform.enabled}

@@ -1,7 +1,7 @@
 import { Checkbox as CheckboxPrimitive } from 'radix-ui'
 import * as React from 'react'
 
-import { CheckIcon } from '@/lib/icons'
+import { Codicon } from '@/components/ui/codicon'
 import { cn } from '@/lib/utils'
 
 function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
@@ -18,7 +18,7 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
         className="flex items-center justify-center text-current"
         data-slot="checkbox-indicator"
       >
-        <CheckIcon className="size-3.5" />
+        <Codicon name="check" size="0.875rem" />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   )

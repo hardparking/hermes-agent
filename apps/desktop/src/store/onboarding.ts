@@ -164,7 +164,9 @@ async function fetchProviderDefaultModel(
   // returned (model.options orders by recency / authenticated state, so
   // the just-authenticated provider is usually first anyway).
   const lower = preferredSlugs.map(s => s.toLowerCase())
-  const matched = providers.find((p: ModelOptionProvider) => lower.includes(String(p.slug).toLowerCase())) ?? providers[0]
+
+  const matched =
+    providers.find((p: ModelOptionProvider) => lower.includes(String(p.slug).toLowerCase())) ?? providers[0]
 
   const models = matched.models ?? []
 

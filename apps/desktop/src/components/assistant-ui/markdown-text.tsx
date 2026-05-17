@@ -12,10 +12,8 @@ import { type ComponentProps, memo, useEffect, useMemo, useState } from 'react'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
 import { SyntaxHighlighter } from '@/components/chat/shiki-highlighter'
 import { ZoomableImage } from '@/components/chat/zoomable-image'
-import { CopyButton } from '@/components/ui/copy-button'
 import { normalizeExternalUrl, openExternalLink, PrettyLink } from '@/lib/external-link'
 import { createMemoizedMathPlugin } from '@/lib/katex-memo'
-import { isLikelyProseCodeBlock, sanitizeLanguageTag } from '@/lib/markdown-code'
 import { preprocessMarkdown } from '@/lib/markdown-preprocess'
 import {
   filePathFromMediaPath,
@@ -42,28 +40,6 @@ import { cn } from '@/lib/utils'
 // LLM convention). The default false-setting only accepts `$$...$$`.
 const mathPlugin = createMemoizedMathPlugin({ singleDollarTextMath: true })
 
-function CodeHeader({ language, code }: { language?: string; code?: string }) {
-  const normalizedCode = (code ?? '').replace(/^\n+/, '').trimEnd()
-
-  if (!normalizedCode.trim() || isLikelyProseCodeBlock(language, normalizedCode)) {
-    return null
-  }
-
-  const cleanLanguage = sanitizeLanguageTag(language || '')
-  const label = cleanLanguage && cleanLanguage !== 'unknown' ? cleanLanguage : ''
-
-  return (
-    <div className="aui-code-header m-0 flex items-stretch justify-between gap-2 rounded-t-md border border-b-0 border-border bg-muted/60 pr-3 text-xs text-muted-foreground">
-      <span className="flex items-center gap-2.5 py-1.5 pl-3 font-mono uppercase tracking-[0.16em]">
-        <span className="text-midground/85">{label || 'code'}</span>
-      </span>
-      <CopyButton appearance="inline" iconClassName="size-3" label="Copy code" text={normalizedCode}>
-        Copy
-      </CopyButton>
-    </div>
-  )
-}
-
 async function typedBlobUrl(dataUrl: string, mime: string): Promise<string> {
   const blob = await fetch(dataUrl).then(response => response.blob())
 
@@ -87,7 +63,7 @@ async function mediaSrc(path: string): Promise<string> {
 function OpenMediaButton({ kind, path }: { kind: 'audio' | 'video'; path: string }) {
   return (
     <button
-      className="mt-2 bg-transparent text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+      className="mt-2 bg-transparent text-xs font-medium text-muted-foreground underline underline-offset-4 decoration-current/20 hover:text-foreground"
       onClick={() => void window.hermesDesktop?.openExternal(mediaExternalUrl(path))}
       type="button"
     >
@@ -145,7 +121,7 @@ function MediaAttachment({ path }: { path: string }) {
 
   if (kind === 'audio' && src) {
     return (
-      <span className="my-3 block max-w-md rounded-xl border border-border/70 bg-card/70 p-3">
+      <span className="my-3 block max-w-md rounded-xl border border-border bg-muted/35 p-3">
         <span className="mb-2 block truncate text-xs font-medium text-muted-foreground">{name}</span>
         <audio className="block w-full" controls onError={() => setFailed(true)} preload="metadata" src={src} />
         {failed && <OpenMediaButton kind="audio" path={path} />}
@@ -155,7 +131,7 @@ function MediaAttachment({ path }: { path: string }) {
 
   if (kind === 'video' && src) {
     return (
-      <span className="my-3 block max-w-2xl rounded-xl border border-border/70 bg-card/70 p-3">
+      <span className="my-3 block max-w-2xl rounded-xl border border-border bg-muted/35 p-3">
         <span className="mb-2 block truncate text-xs font-medium text-muted-foreground">{name}</span>
         <video
           className="block max-h-112 w-full rounded-lg bg-black"
@@ -170,7 +146,7 @@ function MediaAttachment({ path }: { path: string }) {
 
   return (
     <a
-      className="font-semibold text-foreground underline underline-offset-4 decoration-current wrap-anywhere"
+      className="font-semibold text-foreground underline underline-offset-4 decoration-current/20 wrap-anywhere"
       href="#"
       onClick={event => {
         event.preventDefault()
@@ -213,7 +189,7 @@ function MarkdownLink({ children, className, href, ...props }: ComponentProps<'a
     return (
       <a
         className={cn(
-          'font-semibold text-foreground underline underline-offset-4 decoration-current wrap-anywhere',
+          'font-semibold text-foreground underline underline-offset-4 decoration-current/20 wrap-anywhere',
           className
         )}
         href={href}
@@ -250,6 +226,15 @@ function MarkdownImage({ className, src, alt, ...props }: ComponentProps<'img'>)
   )
 }
 
+// Headings shrink to chat scale rather than the prose default (h1≈xl). Kept
+// table-driven so adding/tweaking levels is one row.
+const HEADING_SIZES: Record<'h1' | 'h2' | 'h3' | 'h4', string> = {
+  h1: 'text-[1rem] tracking-tight',
+  h2: 'text-[0.9375rem] tracking-tight',
+  h3: 'text-[0.875rem]',
+  h4: 'text-[0.8125rem]'
+}
+
 const MarkdownTextImpl = () => {
   const isStreaming = useAuiState(s => s.message.status?.type === 'running')
 
@@ -257,40 +242,44 @@ const MarkdownTextImpl = () => {
     () =>
       ({
         h1: ({ className, ...props }: ComponentProps<'h1'>) => (
-          <h1 className={cn('text-xl font-semibold tracking-tight', className)} {...props} />
+          <h1 className={cn('my-1 font-semibold', HEADING_SIZES.h1, className)} {...props} />
         ),
         h2: ({ className, ...props }: ComponentProps<'h2'>) => (
-          <h2 className={cn('text-lg font-semibold tracking-tight', className)} {...props} />
+          <h2 className={cn('my-1 font-semibold', HEADING_SIZES.h2, className)} {...props} />
         ),
         h3: ({ className, ...props }: ComponentProps<'h3'>) => (
-          <h3 className={cn('text-base font-semibold', className)} {...props} />
+          <h3 className={cn('my-1 font-semibold', HEADING_SIZES.h3, className)} {...props} />
         ),
         h4: ({ className, ...props }: ComponentProps<'h4'>) => (
-          <h4 className={cn('text-sm font-semibold', className)} {...props} />
+          <h4 className={cn('my-1 font-semibold', HEADING_SIZES.h4, className)} {...props} />
         ),
         p: ({ className, ...props }: ComponentProps<'p'>) => (
-          <p className={cn('wrap-anywhere leading-(--dt-line-height)', className)} {...props} />
+          <p className={cn('my-1 wrap-anywhere leading-(--dt-line-height)', className)} {...props} />
         ),
         a: MarkdownLink,
         hr: ({ className, ...props }: ComponentProps<'hr'>) => (
-          <hr className={cn('border-border/70', className)} {...props} />
+          <hr className={cn('border-border', className)} {...props} />
         ),
         blockquote: ({ className, ...props }: ComponentProps<'blockquote'>) => (
           <blockquote
-            className={cn('border-l-2 border-midground/40 pl-3 text-muted-foreground italic', className)}
+            className={cn('border-l-2 border-border pl-3 text-muted-foreground italic', className)}
             {...props}
           />
         ),
-        ul: ({ className, ...props }: ComponentProps<'ul'>) => <ul className={cn(className)} {...props} />,
-        ol: ({ className, ...props }: ComponentProps<'ol'>) => <ol className={cn(className)} {...props} />,
+        ul: ({ className, ...props }: ComponentProps<'ul'>) => (
+          <ul className={cn('my-1 gap-0', className)} {...props} />
+        ),
+        ol: ({ className, ...props }: ComponentProps<'ol'>) => (
+          <ol className={cn('my-1 gap-0', className)} {...props} />
+        ),
         li: ({ className, ...props }: ComponentProps<'li'>) => (
           <li className={cn('leading-(--dt-line-height)', className)} {...props} />
         ),
         table: ({ className, ...props }: ComponentProps<'table'>) => (
-          <div className="aui-md-table my-3 max-w-full overflow-x-auto rounded-md border border-border">
+          <div className="aui-md-table my-2 max-w-full overflow-x-auto rounded-[0.375rem] border border-border">
             <table
               className={cn(
-                'm-0 w-full border-collapse text-sm [&_tr]:border-b [&_tr]:border-border last:[&_tr]:border-0',
+                'm-0 w-full border-collapse text-[0.8125rem] [&_tr]:border-b [&_tr]:border-border last:[&_tr]:border-0',
                 className
               )}
               {...props}
@@ -298,23 +287,22 @@ const MarkdownTextImpl = () => {
           </div>
         ),
         thead: ({ className, ...props }: ComponentProps<'thead'>) => (
-          <thead className={cn('m-0 bg-muted/50 text-foreground', className)} {...props} />
+          <thead className={cn('m-0 bg-muted/35 text-muted-foreground', className)} {...props} />
         ),
         th: ({ className, ...props }: ComponentProps<'th'>) => (
           <th
             className={cn(
-              'px-3 py-1.5 text-left align-middle text-xs font-semibold uppercase tracking-[0.16em] text-midground/75',
+              'px-2.5 py-1.5 text-left align-middle text-[0.75rem] font-medium text-muted-foreground',
               className
             )}
             {...props}
           />
         ),
         td: ({ className, ...props }: ComponentProps<'td'>) => (
-          <td className={cn('px-3 py-2 align-top text-sm leading-snug', className)} {...props} />
+          <td className={cn('px-2.5 py-1.5 align-top text-[0.8125rem] leading-snug', className)} {...props} />
         ),
         img: MarkdownImage,
-        SyntaxHighlighter: (props: SyntaxHighlighterProps) => <SyntaxHighlighter {...props} defer={isStreaming} />,
-        CodeHeader
+        SyntaxHighlighter: (props: SyntaxHighlighterProps) => <SyntaxHighlighter {...props} defer={isStreaming} />
       }) as StreamdownTextComponents,
     [isStreaming]
   )
@@ -324,13 +312,13 @@ const MarkdownTextImpl = () => {
       caret="block"
       components={components}
       containerClassName={cn(
-        'aui-md prose w-full max-w-none overflow-hidden text-base leading-(--dt-line-height) text-foreground',
+        'aui-md prose w-full max-w-none overflow-hidden text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground',
         'prose-p:leading-(--dt-line-height) prose-li:leading-(--dt-line-height)',
         'prose-headings:text-foreground prose-strong:text-foreground',
         'prose-a:break-words prose-p:[overflow-wrap:anywhere]',
-        'prose-li:marker:text-midground/55',
-        'prose-code:rounded prose-code:border-0 prose-code:bg-muted/80 prose-code:px-0.5 prose-code:py-px prose-code:font-mono prose-code:text-[0.86em] prose-code:text-muted-foreground prose-code:before:content-none prose-code:after:content-none',
-        '[&>*:last-child]:mb-0'
+        'prose-li:marker:text-muted-foreground/70',
+        'prose-code:rounded-[0.25rem] prose-code:px-[0.1875rem] prose-code:py-px prose-code:font-mono prose-code:text-[0.9em] prose-code:font-normal prose-code:before:content-none prose-code:after:content-none',
+        '[&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&>*+*]:mt-1'
       )}
       lineNumbers={false}
       mode="streaming"
@@ -345,7 +333,6 @@ const MarkdownTextImpl = () => {
       parseIncompleteMarkdown
       plugins={{ math: mathPlugin, ...(isStreaming ? {} : { code }) }}
       preprocess={preprocessMarkdown}
-      shikiTheme={['github-light-default', 'github-dark-default']}
     />
   )
 }

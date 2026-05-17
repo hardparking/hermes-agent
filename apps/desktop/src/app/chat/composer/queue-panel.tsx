@@ -1,7 +1,8 @@
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { ArrowUp, ChevronDown, Pencil, Trash2 } from '@/lib/icons'
+import { DisclosureCaret } from '@/components/ui/disclosure-caret'
+import { ArrowUp, Pencil, Trash2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 import type { QueuedPromptEntry } from '@/store/composer-queue'
 
@@ -20,7 +21,9 @@ const entryPreview = (entry: QueuedPromptEntry) =>
 export function QueuePanel({ busy, editingId, entries, onDelete, onEdit, onSendNow }: QueuePanelProps) {
   const [collapsed, setCollapsed] = useState(false)
 
-  if (entries.length === 0) return null
+  if (entries.length === 0) {
+    return null
+  }
 
   return (
     <div className="rounded-2xl border border-border/65 bg-[color-mix(in_srgb,var(--dt-card)_70%,transparent)] py-0.5 shadow-[0_0_0_1px_color-mix(in_srgb,var(--dt-card)_30%,transparent)_inset]">
@@ -29,7 +32,7 @@ export function QueuePanel({ busy, editingId, entries, onDelete, onEdit, onSendN
         onClick={() => setCollapsed(open => !open)}
         type="button"
       >
-        <ChevronDown className={cn('shrink-0 transition-transform', collapsed && '-rotate-90')} size={14} />
+        <DisclosureCaret className="shrink-0" open={!collapsed} size="0.875rem" />
         <span className="truncate">{entries.length} Queued</span>
       </button>
 

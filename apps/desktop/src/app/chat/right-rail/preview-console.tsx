@@ -2,10 +2,10 @@ import { useStore } from '@nanostores/react'
 import type { CSSProperties, MutableRefObject, PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 
+import { requestComposerInsert } from '@/app/chat/composer/focus'
 import { CopyButton } from '@/components/ui/copy-button'
 import { PanelBottom, Send, Trash2 } from '@/lib/icons'
 import { cn } from '@/lib/utils'
-import { $composerDraft, setComposerDraft } from '@/store/composer'
 import { notify } from '@/store/notifications'
 
 import type { ConsoleEntry, PreviewConsoleState } from './preview-console-state'
@@ -186,10 +186,8 @@ export function PreviewConsolePanel({
     }
 
     const block = ['Preview console:', '```', ...entries.map(formatLogLine), '```'].join('\n')
-    const draft = $composerDraft.get()
-    const next = draft && !draft.endsWith('\n') ? `${draft}\n\n${block}` : `${draft}${block}`
 
-    setComposerDraft(next)
+    requestComposerInsert(block, { mode: 'block', target: 'main' })
     consoleState.clearSelection()
     notify({
       kind: 'success',

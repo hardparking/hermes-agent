@@ -148,7 +148,7 @@ function EnvVarRow({
               href={info.url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[0.65rem] text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-[0.65rem] text-primary underline-offset-4 decoration-current/40 hover:underline"
             >
               {t.env.getKey} <ExternalLink className="h-2.5 w-2.5" />
             </a>
@@ -184,7 +184,7 @@ function EnvVarRow({
               href={info.url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[0.65rem] text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-[0.65rem] text-primary underline-offset-4 decoration-current/40 hover:underline"
             >
               {t.env.getKey} <ExternalLink className="h-2.5 w-2.5" />
             </a>
@@ -217,7 +217,7 @@ function EnvVarRow({
             href={info.url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 text-[0.65rem] text-primary hover:underline"
+            className="inline-flex items-center gap-1 text-[0.65rem] text-primary underline-offset-4 decoration-current/40 hover:underline"
           >
             {t.env.getKey} <ExternalLink className="h-2.5 w-2.5" />
           </a>
@@ -407,7 +407,7 @@ function ProviderGroupCard({
               href={keyUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[0.65rem] text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-[0.65rem] text-primary underline-offset-4 decoration-current/40 hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
               {t.env.getKey} <ExternalLink className="h-2.5 w-2.5" />

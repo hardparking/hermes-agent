@@ -54,6 +54,7 @@ interface CollectedPane {
   defaultOpen: boolean
   disabled: boolean
   id: string
+  resizable: boolean
   side: PaneSide
   width: string
 }
@@ -110,6 +111,7 @@ function collectPanes(children: ReactNode) {
       defaultOpen: props.defaultOpen ?? true,
       disabled: props.disabled ?? false,
       id: props.id,
+      resizable: props.resizable ?? false,
       side: props.side,
       width: widthToCss(props.width, DEFAULT_WIDTH)
     }
@@ -128,7 +130,7 @@ function trackForPane(pane: CollectedPane, states: Record<string, { open: boolea
     return { open: false, track: '0px' }
   }
 
-  const override = states[pane.id]?.widthOverride
+  const override = pane.resizable ? states[pane.id]?.widthOverride : undefined
 
   return { open: true, track: override !== undefined ? `${override}px` : pane.width }
 }
@@ -286,14 +288,14 @@ export function Pane({
           aria-label={`Resize ${id}`}
           aria-orientation="vertical"
           className={cn(
-            'group absolute bottom-0 top-0 z-10 w-3 cursor-col-resize [-webkit-app-region:no-drag]',
+            'group absolute bottom-0 top-0 z-20 w-1 cursor-col-resize [-webkit-app-region:no-drag]',
             slot.side === 'left' ? 'right-0 translate-x-1/2' : 'left-0 -translate-x-1/2'
           )}
           onPointerDown={startResize}
           role="separator"
           tabIndex={0}
         >
-          <span className="absolute left-1/2 top-1/2 h-18 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/80 opacity-0 transition-opacity duration-100 group-hover:opacity-[0.65] group-focus-visible:opacity-[0.65]" />
+          <span className="absolute inset-y-0 left-1/2 w-(--vscode-sash-hover-size,0.25rem) -translate-x-1/2 bg-(--ui-sash-hover-border) opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-visible:opacity-100" />
         </div>
       )}
       {children}

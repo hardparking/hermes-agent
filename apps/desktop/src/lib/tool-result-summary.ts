@@ -2,6 +2,7 @@
 // mode still gets the raw JSON section.
 
 const WRAPPER_KEYS = ['data', 'result', 'output', 'response', 'payload'] as const
+
 const PRIORITY_KEYS = [
   'title',
   'name',
@@ -17,6 +18,7 @@ const PRIORITY_KEYS = [
   'summary',
   'description'
 ] as const
+
 const ERROR_KEYS = ['error', 'errors', 'failure', 'exception'] as const
 const ERROR_MSG_KEYS = ['message', 'reason', 'detail', 'stderr'] as const
 const NON_ERROR_TEXT = new Set(['', '0', 'false', 'none', 'null', 'nil', 'ok', 'success', 'n/a', 'na'])
@@ -66,6 +68,7 @@ function clipBlock(value: string, maxChars = 1800, maxLines = 18): string {
   if (!t) {
     return ''
   }
+
   const lines = t.split('\n')
   let text = lines.slice(0, maxLines).join('\n')
   const clipped = lines.length > maxLines || text.length > maxChars
@@ -187,11 +190,13 @@ function formatFieldValue(value: unknown, depth: number): string {
     if (!v.length) {
       return ''
     }
+
     const scalars = v.map(summarizeScalar).filter(Boolean)
 
     if (scalars.length === v.length && v.length <= 4) {
       return clipInline(scalars.join(', '))
     }
+
     const first = summarizeListItem(v[0], depth + 1)
 
     return first ? `${pluralize(v.length, 'item')} (${first})` : pluralize(v.length, 'item')
@@ -207,16 +212,21 @@ function formatFieldValue(value: unknown, depth: number): string {
 // "Returned N items" / "0 items" / "Returned an empty object" are all
 // noise — better to render nothing and let the title carry the signal.
 function formatArraySummary(value: unknown[], depth: number): string {
-  if (!value.length) return ''
+  if (!value.length) {
+    return ''
+  }
 
   const max = 6
+
   const lines = value
     .slice(0, max)
     .map(item => summarizeListItem(item, depth + 1))
     .filter(Boolean)
     .map(l => `- ${l}`)
 
-  if (!lines.length) return ''
+  if (!lines.length) {
+    return ''
+  }
 
   if (value.length > max) {
     const remaining = value.length - max
@@ -228,7 +238,10 @@ function formatArraySummary(value: unknown[], depth: number): string {
 
 function formatRecordSummary(record: Json, depth: number): string {
   const keys = Object.keys(record)
-  if (!keys.length) return ''
+
+  if (!keys.length) {
+    return ''
+  }
 
   if (depth <= 2) {
     const direct = firstString(record, ['message', 'summary', 'description', 'preview', 'text', 'content'])
@@ -249,6 +262,7 @@ function formatRecordSummary(record: Json, depth: number): string {
     if (!v) {
       continue
     }
+
     lines.push(`- ${titleCase(k)}: ${v}`)
 
     if (lines.length >= max) {
@@ -256,7 +270,9 @@ function formatRecordSummary(record: Json, depth: number): string {
     }
   }
 
-  if (!lines.length) return ''
+  if (!lines.length) {
+    return ''
+  }
 
   if (candidates.length > lines.length) {
     const remaining = candidates.length - lines.length
@@ -270,6 +286,7 @@ function formatSummaryValue(value: unknown, depth: number): string {
   if (depth > 4) {
     return ''
   }
+
   const v = norm(value)
 
   if (typeof v === 'string') {
@@ -383,11 +400,13 @@ function findNestedError(value: unknown, depth: number, seen: Set<unknown>): str
   if (depth > 5) {
     return ''
   }
+
   const v = norm(value)
 
   if (!v || typeof v !== 'object' || seen.has(v)) {
     return ''
   }
+
   seen.add(v)
 
   if (Array.isArray(v)) {
@@ -408,6 +427,7 @@ function findNestedError(value: unknown, depth: number, seen: Set<unknown>): str
     if (!hasMeaningfulErrorValue(record[k])) {
       continue
     }
+
     const text = valueErrorText(record[k])
 
     if (text) {

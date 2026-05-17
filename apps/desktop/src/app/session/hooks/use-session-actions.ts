@@ -3,7 +3,7 @@ import { useCallback, useRef } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
 
 import { deleteSession, getSessionMessages } from '@/hermes'
-import { type ChatMessage, chatMessageText, toChatMessages } from '@/lib/chat-messages'
+import { type ChatMessage, chatMessageText, preserveLocalAssistantErrors, toChatMessages } from '@/lib/chat-messages'
 import { normalizePersonalityValue } from '@/lib/chat-runtime'
 import { embeddedImageUrls, textWithoutEmbeddedImages } from '@/lib/embedded-images'
 import { clearComposerAttachments, clearComposerDraft } from '@/store/composer'
@@ -12,6 +12,7 @@ import { $pinnedSessionIds } from '@/store/layout'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
 import {
+  $currentCwd,
   $messages,
   $sessions,
   setActiveSessionId,
@@ -91,6 +92,7 @@ function chatMessagesEquivalent(a: ChatMessage, b: ChatMessage): boolean {
     a.id !== b.id ||
     a.role !== b.role ||
     a.pending !== b.pending ||
+    a.error !== b.error ||
     a.hidden !== b.hidden ||
     a.branchGroupId !== b.branchGroupId
   ) {
@@ -166,6 +168,7 @@ function upsertOptimisticSession(
   const now = Date.now() / 1000
 
   const session: SessionInfo = {
+    cwd: created.info?.cwd ?? null,
     ended_at: null,
     id,
     input_tokens: 0,
@@ -184,10 +187,22 @@ function upsertOptimisticSession(
   setSessions(prev => [session, ...prev.filter(s => s.id !== id)])
 }
 
-function applyRuntimeInfo(info: SessionCreateResponse['info'] | undefined) {
-  if (!info) {
+function patchSessionWorkspace(sessionId: string, cwd: string | undefined) {
+  if (!cwd) {
     return
   }
+
+  setSessions(prev => prev.map(session => (session.id === sessionId ? { ...session, cwd } : session)))
+}
+
+function applyRuntimeInfo(
+  info: SessionCreateResponse['info'] | undefined
+): Partial<Pick<ClientSessionState, 'branch' | 'cwd'>> | null {
+  if (!info) {
+    return null
+  }
+
+  const sessionState: Partial<Pick<ClientSessionState, 'branch' | 'cwd'>> = {}
 
   if (info.credential_warning) {
     requestDesktopOnboarding(info.credential_warning)
@@ -203,10 +218,12 @@ function applyRuntimeInfo(info: SessionCreateResponse['info'] | undefined) {
 
   if (info.cwd) {
     setCurrentCwd(info.cwd)
+    sessionState.cwd = info.cwd
   }
 
   if (info.branch !== undefined) {
     setCurrentBranch(info.branch || '')
+    sessionState.branch = info.branch || ''
   }
 
   if (typeof info.personality === 'string') {
@@ -228,6 +245,8 @@ function applyRuntimeInfo(info: SessionCreateResponse['info'] | undefined) {
   if (info.usage) {
     setCurrentUsage(current => ({ ...current, ...info.usage }))
   }
+
+  return sessionState
 }
 
 export function useSessionActions({
@@ -269,6 +288,8 @@ export function useSessionActions({
       })
       setSessionStartedAt(null)
       setTurnStartedAt(null)
+      setCurrentCwd('')
+      setCurrentBranch('')
       clearComposerDraft()
       clearComposerAttachments()
       setFreshDraftReady(true)
@@ -284,7 +305,8 @@ export function useSessionActions({
     creatingSessionRef.current = true
 
     try {
-      const created = await requestGateway<SessionCreateResponse>('session.create', { cols: 96 })
+      const cwd = $currentCwd.get().trim()
+      const created = await requestGateway<SessionCreateResponse>('session.create', { cols: 96, ...(cwd && { cwd }) })
       const stored = created.stored_session_id ?? null
 
       if (
@@ -310,7 +332,11 @@ export function useSessionActions({
       setActiveSessionId(created.session_id)
       setSelectedStoredSessionId(stored)
       setSessionStartedAt(Date.now())
-      applyRuntimeInfo(created.info)
+      const runtimeInfo = applyRuntimeInfo(created.info)
+
+      if (runtimeInfo) {
+        updateSessionState(created.session_id, state => ({ ...state, ...runtimeInfo }), stored)
+      }
 
       return created.session_id
     } finally {
@@ -325,7 +351,8 @@ export function useSessionActions({
     getRouteToken,
     navigate,
     requestGateway,
-    selectedStoredSessionIdRef
+    selectedStoredSessionIdRef,
+    updateSessionState
   ])
 
   const selectSidebarItem = useCallback(
@@ -376,6 +403,8 @@ export function useSessionActions({
         setActiveSessionId(cachedRuntimeId)
         activeSessionIdRef.current = cachedRuntimeId
         syncSessionStateToView(cachedRuntimeId, cachedState)
+        setCurrentCwd(cachedState.cwd)
+        setCurrentBranch(cachedState.branch)
         setSessionStartedAt(Date.now())
         clearComposerDraft()
         clearComposerAttachments()
@@ -428,7 +457,7 @@ export function useSessionActions({
           const storedMessages = await getSessionMessages(storedSessionId)
 
           if (isCurrentResume()) {
-            localSnapshot = toChatMessages(storedMessages.messages)
+            localSnapshot = preserveLocalAssistantErrors(toChatMessages(storedMessages.messages), $messages.get())
 
             if (!chatMessageArraysEquivalent($messages.get(), localSnapshot)) {
               setMessages(localSnapshot)
@@ -448,7 +477,11 @@ export function useSessionActions({
         }
 
         const currentMessages = $messages.get()
-        const resumedMessages = reconcileResumeMessages(toChatMessages(resumed.messages), currentMessages)
+
+        const resumedMessages = preserveLocalAssistantErrors(
+          reconcileResumeMessages(toChatMessages(resumed.messages), currentMessages),
+          currentMessages
+        )
         // Avoid a second visible transcript rebuild on resume/switch.
         // `getSessionMessages()` is the stable stored transcript snapshot and
         // paints first; `session.resume` can return a slightly different
@@ -458,19 +491,26 @@ export function useSessionActions({
         // exists; use gateway messages only as a fallback when no local
         // snapshot was available.
 
-        const messagesForView =
+        const preferredMessages =
           localSnapshot.length > 0
             ? localSnapshot
             : chatMessageArraysEquivalent(currentMessages, resumedMessages)
               ? currentMessages
               : resumedMessages
 
+        const messagesForView = preserveLocalAssistantErrors(preferredMessages, currentMessages)
+
         setActiveSessionId(resumed.session_id)
         activeSessionIdRef.current = resumed.session_id
+        const runtimeInfo = applyRuntimeInfo(resumed.info)
+
+        patchSessionWorkspace(storedSessionId, runtimeInfo?.cwd)
+
         updateSessionState(
           resumed.session_id,
           state => ({
             ...state,
+            ...(runtimeInfo ?? {}),
             messages: messagesForView,
             busy: false,
             awaitingResponse: false
@@ -479,7 +519,6 @@ export function useSessionActions({
         )
         clearComposerDraft()
         clearComposerAttachments()
-        applyRuntimeInfo(resumed.info)
       } catch (err) {
         if (!isCurrentResume()) {
           return
@@ -491,7 +530,7 @@ export function useSessionActions({
           return
         }
 
-        setMessages(toChatMessages(fallback.messages))
+        setMessages(preserveLocalAssistantErrors(toChatMessages(fallback.messages), $messages.get()))
         notifyError(err, 'Resume failed')
       } finally {
         if (isCurrentResume()) {
@@ -570,8 +609,11 @@ export function useSessionActions({
 
         clearNotifications()
 
+        const cwd = $currentCwd.get().trim()
+
         const branched = await requestGateway<SessionCreateResponse>('session.create', {
           cols: 96,
+          ...(cwd && { cwd }),
           messages: branchMessages.map(({ content, role }) => ({ content, role })),
           title: 'Branch'
         })
@@ -600,7 +642,13 @@ export function useSessionActions({
 
         clearComposerDraft()
         clearComposerAttachments()
-        applyRuntimeInfo(branched.info)
+        const runtimeInfo = applyRuntimeInfo(branched.info)
+
+        patchSessionWorkspace(routedSessionId, runtimeInfo?.cwd)
+
+        if (runtimeInfo) {
+          updateSessionState(branched.session_id, state => ({ ...state, ...runtimeInfo }), routedSessionId)
+        }
 
         return true
       } catch (err) {

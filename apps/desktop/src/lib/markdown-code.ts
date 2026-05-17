@@ -49,6 +49,65 @@ export function sanitizeLanguageTag(tag: string): string {
   return VALID_LANGUAGE_RE.test(first) && first.length <= 16 ? first.toLowerCase() : ''
 }
 
+// Sanitized language tag → codicon glyph. Anything not listed falls back to
+// the generic `code` glyph, which matches what the tool-row icons use.
+const CODICON_BY_LANGUAGE: Record<string, string> = {
+  bash: 'terminal',
+  cmd: 'terminal',
+  console: 'terminal',
+  fish: 'terminal',
+  powershell: 'terminal',
+  ps1: 'terminal',
+  sh: 'terminal',
+  shell: 'terminal',
+  zsh: 'terminal',
+
+  md: 'markdown',
+  markdown: 'markdown',
+
+  json: 'json',
+  json5: 'json',
+
+  ini: 'settings-gear',
+  toml: 'settings-gear',
+  yaml: 'settings-gear',
+  yml: 'settings-gear',
+  dotenv: 'settings-gear',
+  env: 'settings-gear',
+
+  graphql: 'database',
+  gql: 'database',
+  mysql: 'database',
+  postgres: 'database',
+  postgresql: 'database',
+  sql: 'database',
+  sqlite: 'database',
+
+  diff: 'diff',
+  patch: 'diff',
+
+  css: 'symbol-color',
+  less: 'symbol-color',
+  sass: 'symbol-color',
+  scss: 'symbol-color',
+  svg: 'symbol-color',
+
+  regex: 'regex',
+  regexp: 'regex',
+
+  curl: 'globe',
+  http: 'globe',
+
+  docker: 'package',
+  dockerfile: 'package',
+
+  mermaid: 'graph'
+}
+
+export function codiconForLanguage(language: string | undefined): string {
+  return CODICON_BY_LANGUAGE[sanitizeLanguageTag(language || '')] || 'code'
+}
+
 function proseLineCount(body: string): number {
   return body.split('\n').filter(line => {
     const trimmed = line.trim()

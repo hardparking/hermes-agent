@@ -1,22 +1,57 @@
+import type { Unstable_TriggerAdapter, Unstable_TriggerItem } from '@assistant-ui/core'
 import {
   ActionBarPrimitive,
-  AuiIf,
   BranchPickerPrimitive,
   ComposerPrimitive,
   ErrorPrimitive,
   MessagePrimitive,
-  ThreadPrimitive,
   type ToolCallMessagePartProps,
-  useAuiEvent,
+  useAui,
   useAuiState
 } from '@assistant-ui/react'
 import { useStore } from '@nanostores/react'
-import { type FC, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { StickToBottom, useStickToBottomContext } from 'use-stick-to-bottom'
+import { IconPlayerStopFilled } from '@tabler/icons-react'
+import {
+  type ClipboardEvent,
+  type FC,
+  type FocusEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type DragEvent as ReactDragEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 
+import { COMPOSER_DROP_ACTIVE_CLASS, COMPOSER_DROP_FADE_CLASS } from '@/app/chat/composer/drop-affordance'
+import {
+  type ComposerInsertMode,
+  focusComposerInput,
+  markActiveComposer,
+  onComposerFocusRequest,
+  onComposerInsertRequest
+} from '@/app/chat/composer/focus'
+import { useAtCompletions } from '@/app/chat/composer/hooks/use-at-completions'
+import { useSlashCompletions } from '@/app/chat/composer/hooks/use-slash-completions'
+import { dragHasAttachments, droppedFileInlineRef, insertInlineRefsIntoEditor } from '@/app/chat/composer/inline-refs'
+import {
+  composerPlainText,
+  placeCaretEnd,
+  refChipElement,
+  renderComposerContents,
+  RICH_INPUT_SLOT
+} from '@/app/chat/composer/rich-editor'
+import { detectTrigger, textBeforeCaret, type TriggerState } from '@/app/chat/composer/text-utils'
+import { ComposerTriggerPopover } from '@/app/chat/composer/trigger-popover'
+import { extractDroppedFiles, HERMES_PATHS_MIME } from '@/app/chat/hooks/use-composer-actions'
 import { ClarifyTool } from '@/components/assistant-ui/clarify-tool'
 import { DirectiveContent, DirectiveText } from '@/components/assistant-ui/directive-text'
+import { hermesDirectiveFormatter } from '@/components/assistant-ui/directive-text'
 import { MarkdownText } from '@/components/assistant-ui/markdown-text'
+import { VirtualizedThread } from '@/components/assistant-ui/thread-virtualizer'
 import { HoistedTodoPanel, todosFromMessageContent } from '@/components/assistant-ui/todo-tool'
 import { ToolFallback, ToolGroupSlot } from '@/components/assistant-ui/tool-fallback'
 import { TooltipIconButton } from '@/components/assistant-ui/tooltip-icon-button'
@@ -27,6 +62,7 @@ import { GeneratedImageProvider, useGeneratedImageContext } from '@/components/c
 import { ImageGenerationPlaceholder } from '@/components/chat/image-generation-placeholder'
 import { Intro, type IntroProps } from '@/components/chat/intro'
 import { PreviewAttachment } from '@/components/chat/preview-attachment'
+import { Codicon } from '@/components/ui/codicon'
 import { CopyButton } from '@/components/ui/copy-button'
 import {
   DropdownMenu,
@@ -36,34 +72,18 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Loader } from '@/components/ui/loader'
+import type { HermesGateway } from '@/hermes'
+import { DATA_IMAGE_URL_RE } from '@/lib/embedded-images'
 import { triggerHaptic } from '@/lib/haptics'
-import {
-  CheckIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  GitBranchIcon,
-  Loader2Icon,
-  MoreHorizontalIcon,
-  PencilIcon,
-  RefreshCwIcon,
-  Volume2Icon,
-  VolumeXIcon,
-  XIcon
-} from '@/lib/icons'
+import { GitBranchIcon, Loader2Icon, Volume2Icon, VolumeXIcon } from '@/lib/icons'
 import { extractPreviewTargets } from '@/lib/preview-targets'
 import { useEnterAnimation } from '@/lib/use-enter-animation'
 import { cn } from '@/lib/utils'
 import { playSpeechText, stopVoicePlayback } from '@/lib/voice-playback'
 import { notifyError } from '@/store/notifications'
-import { setThreadScrolledUp } from '@/store/thread-scroll'
 import { $voicePlayback } from '@/store/voice-playback'
 
 type ThreadLoadingState = 'response' | 'session'
-
-interface StickyStateFlags {
-  escapedFromLock: boolean
-  isAtBottom: boolean
-}
 
 interface MessageActionProps {
   messageId: string
@@ -99,234 +119,60 @@ const INTERRUPTED_ONLY_RE = /^_?\[interrupted\]_?$/i
 
 const isInterruptedOnlyMessage = (text: string) => INTERRUPTED_ONLY_RE.test(text.trim())
 
-function resetStickyState(state: StickyStateFlags) {
-  state.escapedFromLock = false
-  state.isAtBottom = true
-}
-
-function pinElementToBottom(el: HTMLElement) {
-  el.scrollTop = el.scrollHeight
-
-  return el.scrollTop
-}
-
 export const Thread: FC<{
   clampToComposer?: boolean
+  cwd?: string | null
+  gateway?: HermesGateway | null
   intro?: IntroProps
   loading?: ThreadLoadingState
   onBranchInNewChat?: (messageId: string) => void
+  onCancel?: () => Promise<void> | void
+  sessionId?: string | null
   sessionKey?: string | null
-}> = ({ clampToComposer = false, intro, loading, onBranchInNewChat, sessionKey }) => {
-  const introHero = useAuiState(s => Boolean(intro) && s.thread.isEmpty)
+}> = ({
+  clampToComposer = false,
+  cwd = null,
+  gateway = null,
+  intro,
+  loading,
+  onBranchInNewChat,
+  onCancel,
+  sessionId = null,
+  sessionKey
+}) => {
+  const messageComponents = useMemo(
+    () => ({
+      AssistantMessage: () => <AssistantMessage onBranchInNewChat={onBranchInNewChat} />,
+      SystemMessage,
+      UserEditComposer: () => <UserEditComposer cwd={cwd} gateway={gateway} sessionId={sessionId} />,
+      UserMessage: () => <UserMessage onCancel={onCancel} />
+    }),
+    [cwd, gateway, onBranchInNewChat, onCancel, sessionId]
+  )
+
+  const emptyPlaceholder = intro ? (
+    <div
+      className="flex min-h-0 w-full flex-col items-center justify-center"
+      style={{ paddingBottom: 'var(--composer-measured-height)' }}
+    >
+      <Intro {...intro} />
+    </div>
+  ) : undefined
 
   return (
     <GeneratedImageProvider>
-      <ThreadPrimitive.Root className="relative grid h-full min-h-0 max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden bg-transparent contain-[layout_paint]">
-        <ThreadPrimitive.ViewportProvider>
-          <StickToBottom
-            className="relative min-h-0 max-w-full overflow-hidden contain-[layout_paint]"
-            initial="instant"
-            resize="instant"
-            style={{ height: clampToComposer ? 'var(--thread-viewport-height)' : '100%' }}
-          >
-            <ThreadScrollSync sessionKey={sessionKey} />
-            <StickToBottom.Content
-              className={cn(
-                'scroll-auto mx-auto min-h-full w-full max-w-[calc(var(--composer-width)-2rem)] min-w-0 gap-3 px-4 sm:px-6 lg:px-8',
-                introHero
-                  ? 'grid grid-rows-[minmax(0,1fr)_auto] py-[calc(var(--vsq)*12)]'
-                  : 'flex flex-col pt-[calc(var(--vsq)*19)]'
-              )}
-              data-slot="aui_thread-content"
-              scrollClassName="overflow-x-hidden overflow-y-auto overscroll-contain"
-            >
-              <AuiIf condition={s => Boolean(intro) && s.thread.isEmpty}>
-                {intro ? (
-                  <div
-                    className="flex min-h-0 w-full flex-col items-center justify-center"
-                    style={{ paddingBottom: 'var(--composer-measured-height)' }}
-                  >
-                    <Intro {...intro} />
-                  </div>
-                ) : null}
-              </AuiIf>
-              <ThreadPrimitive.Messages
-                components={{
-                  AssistantMessage: () => <AssistantMessage onBranchInNewChat={onBranchInNewChat} />,
-                  SystemMessage,
-                  UserEditComposer,
-                  UserMessage
-                }}
-              />
-              {loading === 'response' && <ResponseLoadingIndicator />}
-            </StickToBottom.Content>
-          </StickToBottom>
-        </ThreadPrimitive.ViewportProvider>
+      <div className="relative grid h-full min-h-0 max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden bg-transparent contain-[layout_paint]">
+        <VirtualizedThread
+          clampToComposer={clampToComposer}
+          components={messageComponents}
+          emptyPlaceholder={emptyPlaceholder}
+          loadingIndicator={loading === 'response' ? <ResponseLoadingIndicator /> : null}
+          sessionKey={sessionKey}
+        />
         {loading === 'session' && <CenteredThreadSpinner />}
-      </ThreadPrimitive.Root>
+      </div>
     </GeneratedImageProvider>
   )
-}
-
-const ThreadScrollSync: FC<{ sessionKey?: string | null }> = ({ sessionKey }) => {
-  const { scrollRef, isAtBottom, state } = useStickToBottomContext()
-  const sessionKeyRef = useRef<string | null>(sessionKey ?? null)
-
-  const armedRef = useRef<ScrollBehavior | null>(null)
-  const pinRafRef = useRef<number | null>(null)
-  const previousScrollTopRef = useRef(0)
-  const suppressNextScrollEventRef = useRef(false)
-
-  const messageCount = useAuiState(s => s.thread.messages.length)
-  const prevMessageCountRef = useRef(messageCount)
-
-  useEffect(() => {
-    setThreadScrolledUp(!isAtBottom)
-  }, [isAtBottom])
-
-  useEffect(() => {
-    return () => {
-      setThreadScrolledUp(false)
-    }
-  }, [])
-
-  const armAndPin = useCallback(
-    (behavior: ScrollBehavior) => {
-      const el = scrollRef.current
-
-      if (!el) {
-        return
-      }
-
-      armedRef.current = behavior
-      resetStickyState(state)
-      suppressNextScrollEventRef.current = true
-      previousScrollTopRef.current = pinElementToBottom(el)
-    },
-    [scrollRef, state]
-  )
-
-  useEffect(() => {
-    const el = scrollRef.current
-
-    if (!el) {
-      return
-    }
-
-    const observer = new ResizeObserver(() => {
-      if (pinRafRef.current !== null) {
-        return
-      }
-
-      pinRafRef.current = window.requestAnimationFrame(() => {
-        pinRafRef.current = null
-
-        if (!armedRef.current) {
-          return
-        }
-
-        const distance = el.scrollHeight - (el.scrollTop + el.clientHeight)
-
-        if (distance < 2) {
-          armedRef.current = null
-
-          return
-        }
-
-        suppressNextScrollEventRef.current = true
-        previousScrollTopRef.current = pinElementToBottom(el)
-      })
-    })
-
-    observer.observe(el)
-
-    const content = el.firstElementChild
-
-    if (content) {
-      observer.observe(content)
-    }
-
-    return () => {
-      observer.disconnect()
-
-      if (pinRafRef.current !== null) {
-        window.cancelAnimationFrame(pinRafRef.current)
-        pinRafRef.current = null
-      }
-    }
-  }, [scrollRef])
-
-  useEffect(() => {
-    const el = scrollRef.current
-
-    if (!el) {
-      return
-    }
-
-    const onWheel = (e: WheelEvent) => {
-      if (e.deltaY < 0) {
-        armedRef.current = null
-      }
-    }
-
-    const onTouch = () => {
-      armedRef.current = null
-    }
-
-    const onScroll = () => {
-      const currentTop = el.scrollTop
-
-      if (suppressNextScrollEventRef.current) {
-        suppressNextScrollEventRef.current = false
-        previousScrollTopRef.current = currentTop
-
-        return
-      }
-
-      if (currentTop + 1 < previousScrollTopRef.current) {
-        armedRef.current = null
-      }
-
-      previousScrollTopRef.current = currentTop
-    }
-
-    el.addEventListener('wheel', onWheel, { passive: true })
-    el.addEventListener('touchmove', onTouch, { passive: true })
-    el.addEventListener('scroll', onScroll, { passive: true })
-
-    return () => {
-      el.removeEventListener('wheel', onWheel)
-      el.removeEventListener('touchmove', onTouch)
-      el.removeEventListener('scroll', onScroll)
-    }
-  }, [scrollRef])
-
-  useEffect(() => {
-    const next = sessionKey ?? null
-
-    if (sessionKeyRef.current === next) {
-      return
-    }
-
-    sessionKeyRef.current = next
-    prevMessageCountRef.current = 0
-    armAndPin('auto')
-  }, [armAndPin, sessionKey])
-
-  useEffect(() => {
-    const prev = prevMessageCountRef.current
-    prevMessageCountRef.current = messageCount
-
-    if (prev === 0 && messageCount > 0) {
-      armAndPin('auto')
-    }
-  }, [armAndPin, messageCount])
-
-  useAuiEvent('thread.runStart', () => {
-    armAndPin('instant')
-  })
-
-  return null
 }
 
 function pickPrimaryPreviewTarget(targets: string[]): string[] {
@@ -386,7 +232,7 @@ const AssistantMessage: FC<{ onBranchInNewChat?: (messageId: string) => void }> 
     >
       <div
         className={cn(
-          'wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-base leading-(--dt-line-height) text-foreground',
+          'wrap-anywhere min-w-0 max-w-full overflow-hidden text-pretty text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground',
           interruptedOnly && 'text-[0.8rem] leading-5 text-muted-foreground/82'
         )}
         data-slot="aui_assistant-message-content"
@@ -402,7 +248,7 @@ const AssistantMessage: FC<{ onBranchInNewChat?: (messageId: string) => void }> 
         )}
         <MessagePrimitive.Error>
           <ErrorPrimitive.Root
-            className="mt-2 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+            className="mt-1.5 text-[0.78rem] leading-5 text-[color-mix(in_srgb,var(--dt-destructive)_78%,var(--ui-text-secondary))]"
             role="alert"
           >
             <ErrorPrimitive.Message />
@@ -457,7 +303,7 @@ const ImageGenerateTool: FC<ToolCallMessagePartProps> = ({ result }) => {
   }
 
   return (
-    <div className="mt-2">
+    <div className="mt-1.5">
       <ImageGenerationPlaceholder />
     </div>
   )
@@ -527,28 +373,36 @@ const ThinkingDisclosure: FC<{
   }, [isPreview])
 
   return (
-    <div className="text-sm text-muted-foreground" data-slot="aui_thinking-disclosure" ref={enterRef}>
+    <div
+      className="text-[length:var(--conversation-tool-font-size)] text-(--ui-text-tertiary)"
+      data-slot="aui_thinking-disclosure"
+      ref={enterRef}
+    >
       <DisclosureRow onToggle={() => setUserOpen(!open)} open={open}>
         <span className="flex min-w-0 items-baseline gap-1.5">
           <span
             className={cn(
-              'text-[0.78rem] font-medium leading-[1.1rem] text-foreground/85',
+              'text-[length:var(--conversation-tool-font-size)] font-medium leading-(--conversation-line-height) text-(--ui-text-secondary)',
               pending && 'shimmer text-foreground/55'
             )}
           >
             Thinking
           </span>
           {pending && (
-            <ActivityTimerText className="text-[0.625rem] tabular-nums text-muted-foreground/55" seconds={elapsed} />
+            <ActivityTimerText
+              className="text-[length:var(--conversation-caption-font-size)] tabular-nums text-(--ui-text-tertiary)"
+              seconds={elapsed}
+            />
           )}
         </span>
       </DisclosureRow>
       {open && (
         <div
           className={cn(
-            // Keep the reasoning body tucked close to the "Thinking" row so
-            // it aligns with tool-group disclosure rhythm.
-            'mt-0.5 w-full min-w-0 max-w-full overflow-hidden pr-2 pl-3 wrap-anywhere pb-1',
+            // Body sits flush with the "Thinking" header — no left indent —
+            // and inherits the disclosure-level opacity fade defined in
+            // styles.css (~0.67 at rest, 1 on hover/focus).
+            'mt-0.5 w-full min-w-0 max-w-full overflow-hidden wrap-anywhere pb-1',
             isPreview && 'thinking-preview max-h-40'
           )}
           ref={scrollRef}
@@ -660,10 +514,10 @@ const AssistantActionBar: FC<MessageActionProps> = ({ messageId, messageText, on
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div className="relative shrink-0">
+    <div className="relative flex w-full shrink-0 justify-end">
       <ActionBarPrimitive.Root
         className={cn(
-          'relative flex flex-row items-center gap-2 py-2.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
+          'relative flex flex-row items-center justify-end gap-2 py-1.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
           menuOpen && 'pointer-events-auto opacity-100 [&_button]:opacity-100'
         )}
         data-slot="aui_msg-actions"
@@ -672,13 +526,13 @@ const AssistantActionBar: FC<MessageActionProps> = ({ messageId, messageText, on
         <CopyButton appearance="icon" buttonSize="icon" disabled={!messageText} label="Copy" text={messageText} />
         <ActionBarPrimitive.Reload asChild>
           <TooltipIconButton onClick={() => triggerHaptic('submit')} tooltip="Refresh">
-            <RefreshCwIcon />
+            <Codicon name="refresh" />
           </TooltipIconButton>
         </ActionBarPrimitive.Reload>
         <DropdownMenu onOpenChange={setMenuOpen} open={menuOpen}>
           <DropdownMenuTrigger asChild>
             <TooltipIconButton tooltip="More actions">
-              <MoreHorizontalIcon />
+              <Codicon name="ellipsis" />
             </TooltipIconButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" onCloseAutoFocus={e => e.preventDefault()} sideOffset={6}>
@@ -744,19 +598,19 @@ const MessageTimestamp: FC = () => {
 }
 
 const AssistantFooter: FC<MessageActionProps> = props => (
-  <div className="flex min-h-6 flex-col items-start gap-1 pl-(--message-text-indent)">
+  <div className="flex min-h-6 flex-col items-end gap-1 pr-(--message-text-indent) pl-(--message-text-indent)">
     <BranchPickerPrimitive.Root
       className="inline-flex h-6 items-center gap-1 text-xs text-muted-foreground"
       hideWhenSingleBranch
     >
-      <BranchPickerPrimitive.Previous className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-35">
-        <ChevronLeftIcon className="size-3.5" />
+      <BranchPickerPrimitive.Previous className="grid size-6 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-35">
+        <Codicon name="chevron-left" size="0.875rem" />
       </BranchPickerPrimitive.Previous>
       <span className="tabular-nums">
         <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
       </span>
-      <BranchPickerPrimitive.Next className="grid size-6 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-35">
-        <ChevronRightIcon className="size-3.5" />
+      <BranchPickerPrimitive.Next className="grid size-6 cursor-pointer place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-35">
+        <Codicon name="chevron-right" size="0.875rem" />
       </BranchPickerPrimitive.Next>
     </BranchPickerPrimitive.Root>
     <AssistantActionBar {...props} />
@@ -773,9 +627,50 @@ function messageAttachmentRefs(value: unknown): string[] {
   return value.every(ref => typeof ref === 'string') ? value : EMPTY_ATTACHMENT_REFS
 }
 
-const UserMessage: FC = () => {
+function StickyHumanMessageContainer({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="group/user-message sticky top-0 z-40 -mx-4 flex w-[calc(100%+2rem)] min-w-0 max-w-none flex-col items-stretch gap-0 self-end overflow-visible bg-(--ui-chat-surface-background) px-4 pb-(--conversation-turn-gap) pt-2"
+      data-role="user"
+      data-slot="aui_user-message-root"
+    >
+      {children}
+    </div>
+  )
+}
+
+// Shared "user bubble" base. Both the read-only message and the inline
+// edit composer render the same bubble surface (rounded glass card,
+// shadow-composer); they only differ in border weight, cursor, and
+// padding-right (the read-only view reserves room for the restore icon).
+const USER_BUBBLE_BASE_CLASS =
+  'composer-human-message standalone-glass relative flex w-full min-w-0 max-w-full flex-col gap-1.5 overflow-hidden rounded-xl border bg-(--dt-user-bubble) px-3 py-2 text-left shadow-composer'
+
+const USER_ACTION_ICON_BUTTON_CLASS =
+  'grid cursor-pointer place-items-center rounded-md bg-transparent text-(--ui-text-secondary) transition-colors hover:bg-(--ui-control-active-background) hover:text-foreground disabled:cursor-default disabled:text-(--ui-text-quaternary) disabled:opacity-70'
+
+const USER_ACTION_ICON_SIZE = '0.6875rem'
+const StopGlyph = <IconPlayerStopFilled aria-hidden className="size-3.5 -translate-y-px" />
+
+const UserMessage: FC<{
+  onCancel?: () => Promise<void> | void
+}> = ({ onCancel }) => {
+  const messageId = useAuiState(s => s.message.id)
   const content = useAuiState(s => s.message.content)
   const messageText = messageContentText(content)
+  const threadRunning = useAuiState(s => s.thread.isRunning)
+
+  const latestUserId = useAuiState(s => {
+    for (let i = s.thread.messages.length - 1; i >= 0; i--) {
+      const message = s.thread.messages[i] as { id?: string; role?: string }
+
+      if (message.role === 'user') {
+        return message.id ?? null
+      }
+    }
+
+    return null
+  })
 
   const attachmentRefs = useAuiState(s => {
     const custom = (s.message.metadata?.custom ?? {}) as { attachmentRefs?: unknown }
@@ -784,46 +679,107 @@ const UserMessage: FC = () => {
   })
 
   const hasBody = messageText.trim().length > 0
+  const isLatestUser = messageId === latestUserId
+  const showStop = isLatestUser && threadRunning && Boolean(onCancel)
+  const showRestore = !isLatestUser && !threadRunning
+
+  const bubbleClassName = cn(
+    USER_BUBBLE_BASE_CLASS,
+    'border-(--ui-stroke-tertiary) pr-9 text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground/95 transition-colors',
+    !threadRunning && 'cursor-pointer hover:border-(--ui-stroke-secondary)'
+  )
+
+  const bubbleContent = (
+    <>
+      {attachmentRefs.length > 0 && (
+        <span className="-mx-1 flex flex-wrap gap-1 border-b border-border/45 pb-1.5">
+          <DirectiveContent text={attachmentRefs.join(' ')} />
+        </span>
+      )}
+      {hasBody && (
+        <span className="wrap-anywhere block whitespace-pre-line">
+          <MessagePrimitive.Parts components={{ Text: DirectiveText }} />
+        </span>
+      )}
+    </>
+  )
 
   return (
-    <MessagePrimitive.Root
-      className="group flex min-w-0 max-w-[min(72%,34rem)] flex-col items-end gap-2 self-end overflow-hidden"
-      data-role="user"
-      data-slot="aui_user-message-root"
-    >
-      <div className="flex min-w-0 max-w-full flex-col gap-1.5 overflow-hidden rounded-2xl border border-[color-mix(in_srgb,var(--dt-user-bubble-border)_78%,transparent)] bg-[color-mix(in_srgb,var(--dt-user-bubble)_94%,transparent)] px-3 py-2 text-base leading-(--dt-line-height) text-foreground/95">
-        {attachmentRefs.length > 0 && (
-          <div className="-mx-1 flex flex-wrap gap-1 border-b border-border/45 pb-1.5">
-            <DirectiveContent text={attachmentRefs.join(' ')} />
+    <MessagePrimitive.Root asChild>
+      <StickyHumanMessageContainer>
+        <ActionBarPrimitive.Root className="relative w-full max-w-full" data-slot="aui_user-bubble-actions">
+          <div className="human-message-with-todos-wrapper flex w-full flex-col gap-0">
+            <div className="relative w-full">
+              {threadRunning ? (
+                <div className={bubbleClassName}>{bubbleContent}</div>
+              ) : (
+                <ActionBarPrimitive.Edit asChild>
+                  <button
+                    aria-label="Edit message"
+                    className={bubbleClassName}
+                    onClick={() => triggerHaptic('selection')}
+                    title="Edit message"
+                    type="button"
+                  >
+                    {bubbleContent}
+                  </button>
+                </ActionBarPrimitive.Edit>
+              )}
+              {(showStop || showRestore) && (
+                <div className="pointer-events-none absolute right-2 bottom-2 z-10 flex items-center justify-center opacity-0 transition-opacity group-hover/user-message:opacity-100 group-focus-within/user-message:opacity-100">
+                  {showStop ? (
+                    <button
+                      aria-label="Stop"
+                      className={cn('pointer-events-auto size-5', USER_ACTION_ICON_BUTTON_CLASS)}
+                      onClick={event => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        void onCancel?.()
+                      }}
+                      title="Stop"
+                      type="button"
+                    >
+                      {StopGlyph}
+                    </button>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex size-6 items-center justify-center rounded-md text-(--ui-text-tertiary)"
+                      title="Editable checkpoint"
+                    >
+                      <Codicon name="discard" size="0.875rem" />
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <BranchPickerPrimitive.Root
+              className="checkpoint-container flex items-center gap-1 pb-0 pt-1 pl-1.5 text-[0.75rem] leading-none text-(--ui-text-tertiary)"
+              hideWhenSingleBranch
+            >
+              <span aria-hidden className="checkpoint-icon size-1.5 rounded-full border border-current" />
+              <BranchPickerPrimitive.Previous
+                className="checkpoint-restore-text cursor-pointer rounded-sm bg-transparent px-1 opacity-65 hover:opacity-100 disabled:hidden disabled:cursor-default"
+                title="Restore previous checkpoint"
+              >
+                Restore checkpoint
+              </BranchPickerPrimitive.Previous>
+              <span className="checkpoint-divider opacity-55">
+                <BranchPickerPrimitive.Number />/<BranchPickerPrimitive.Count />
+              </span>
+              <BranchPickerPrimitive.Next
+                className="checkpoint-restore-text cursor-pointer rounded-sm bg-transparent px-1 opacity-65 hover:opacity-100 disabled:hidden disabled:cursor-default"
+                title="Restore next checkpoint"
+              >
+                Go forward
+              </BranchPickerPrimitive.Next>
+            </BranchPickerPrimitive.Root>
           </div>
-        )}
-        {hasBody && (
-          <div className="wrap-anywhere whitespace-pre-line">
-            <MessagePrimitive.Parts components={{ Text: DirectiveText }} />
-          </div>
-        )}
-      </div>
-      <UserActionBar messageText={messageText} />
+        </ActionBarPrimitive.Root>
+      </StickyHumanMessageContainer>
     </MessagePrimitive.Root>
   )
 }
-
-const UserActionBar: FC<{ messageText: string }> = ({ messageText }) => (
-  <div className="relative shrink-0">
-    <ActionBarPrimitive.Root
-      className="relative flex flex-row items-center gap-2 py-2.5 opacity-0 pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100"
-      data-slot="aui_msg-actions"
-      hideWhenRunning
-    >
-      <CopyButton appearance="icon" buttonSize="icon" disabled={!messageText} label="Copy" text={messageText} />
-      <ActionBarPrimitive.Edit asChild>
-        <TooltipIconButton onClick={() => triggerHaptic('selection')} tooltip="Edit">
-          <PencilIcon />
-        </TooltipIconButton>
-      </ActionBarPrimitive.Edit>
-    </ActionBarPrimitive.Root>
-  </div>
-)
 
 const SLASH_STATUS_RE = /^slash:(?<command>\/[^\n]+)\n(?<output>[\s\S]*)$/
 
@@ -861,29 +817,502 @@ const SystemMessage: FC = () => {
   )
 }
 
-const UserEditComposer: FC = () => (
-  <ComposerPrimitive.Root
-    className="flex min-w-[min(18rem,72vw)] max-w-[min(72%,34rem)] flex-col gap-1.5 self-end rounded-2xl border border-[color-mix(in_srgb,var(--dt-user-bubble-border)_88%,transparent)] bg-[color-mix(in_srgb,var(--dt-user-bubble)_98%,transparent)] px-3 py-2 shadow-sm"
-    data-slot="aui_edit-composer-root"
-  >
-    <ComposerPrimitive.Input
-      autoFocus
-      className="min-h-8 w-full resize-none bg-transparent text-base leading-(--dt-line-height) text-foreground/95 outline-none"
-      rows={1}
-      submitMode="enter"
-      unstable_focusOnScrollToBottom={false}
-    />
-    <div className="flex justify-end gap-1">
-      <ComposerPrimitive.Cancel asChild>
-        <TooltipIconButton tooltip="Cancel edit">
-          <XIcon />
-        </TooltipIconButton>
-      </ComposerPrimitive.Cancel>
-      <ComposerPrimitive.Send asChild>
-        <TooltipIconButton onClick={() => triggerHaptic('submit')} tooltip="Send edit">
-          <CheckIcon />
-        </TooltipIconButton>
-      </ComposerPrimitive.Send>
-    </div>
-  </ComposerPrimitive.Root>
-)
+interface UserEditComposerProps {
+  cwd: string | null
+  gateway: HermesGateway | null
+  sessionId: string | null
+}
+
+const UserEditComposer: FC<UserEditComposerProps> = ({ cwd, gateway, sessionId }) => {
+  const aui = useAui()
+  const draft = useAuiState(s => s.composer.text)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const editorRef = useRef<HTMLDivElement | null>(null)
+  const draftRef = useRef(draft)
+  const dragDepthRef = useRef(0)
+  const [dragActive, setDragActive] = useState(false)
+  const [trigger, setTrigger] = useState<TriggerState | null>(null)
+  const [triggerActive, setTriggerActive] = useState(0)
+  const [triggerItems, setTriggerItems] = useState<readonly Unstable_TriggerItem[]>([])
+  const [triggerPlacement, setTriggerPlacement] = useState<'bottom' | 'top'>('top')
+  const [focusRequestId, setFocusRequestId] = useState(0)
+  const [submitting, setSubmitting] = useState(false)
+  const expanded = draft.includes('\n')
+  const canSubmit = draft.trim().length > 0
+  const at = useAtCompletions({ cwd, gateway, sessionId })
+  const slash = useSlashCompletions({ gateway })
+
+  const focusEditor = useCallback(() => {
+    const editor = editorRef.current
+
+    focusComposerInput(editor)
+
+    if (editor) {
+      placeCaretEnd(editor)
+    }
+
+    markActiveComposer('edit')
+  }, [])
+
+  const requestEditFocus = useCallback(() => {
+    setFocusRequestId(id => id + 1)
+  }, [])
+
+  const appendExternalText = useCallback(
+    (text: string, mode: ComposerInsertMode) => {
+      const value = text.trim()
+
+      if (!value) {
+        return
+      }
+
+      const base = mode === 'inline' ? draftRef.current.trimEnd() : draftRef.current
+      const sep = mode === 'inline' ? (base ? ' ' : '') : base && !base.endsWith('\n') ? '\n\n' : ''
+      const next = `${base}${sep}${value}`
+
+      draftRef.current = next
+      aui.composer().setText(next)
+
+      const editor = editorRef.current
+
+      if (editor) {
+        renderComposerContents(editor, next)
+        placeCaretEnd(editor)
+      }
+
+      setFocusRequestId(id => id + 1)
+    },
+    [aui]
+  )
+
+  useEffect(() => {
+    draftRef.current = draft
+
+    const editor = editorRef.current
+
+    if (
+      editor &&
+      (editor.childNodes.length === 0 || (document.activeElement !== editor && composerPlainText(editor) !== draft))
+    ) {
+      renderComposerContents(editor, draft)
+
+      if (document.activeElement === editor) {
+        placeCaretEnd(editor)
+      }
+    }
+  }, [draft])
+
+  useEffect(() => {
+    focusEditor()
+  }, [focusEditor, focusRequestId])
+
+  useEffect(() => {
+    const offFocus = onComposerFocusRequest(target => {
+      if (target === 'edit') {
+        setFocusRequestId(id => id + 1)
+      }
+    })
+
+    const offInsert = onComposerInsertRequest(({ mode, target, text }) => {
+      if (target === 'edit') {
+        appendExternalText(text, mode)
+      }
+    })
+
+    return () => {
+      offFocus()
+      offInsert()
+    }
+  }, [appendExternalText])
+
+  const syncDraftFromEditor = useCallback(
+    (editor: HTMLDivElement) => {
+      const nextDraft = composerPlainText(editor)
+
+      if (nextDraft !== draftRef.current) {
+        draftRef.current = nextDraft
+        aui.composer().setText(nextDraft)
+      }
+
+      return nextDraft
+    },
+    [aui]
+  )
+
+  const refreshTrigger = useCallback(() => {
+    const editor = editorRef.current
+
+    if (!editor) {
+      return
+    }
+
+    const before = textBeforeCaret(editor)
+    const detected = detectTrigger(before ?? composerPlainText(editor))
+
+    if (detected) {
+      const rect = editor.getBoundingClientRect()
+      const spaceAbove = rect.top
+      const spaceBelow = window.innerHeight - rect.bottom
+
+      setTriggerPlacement(spaceAbove < 220 && spaceBelow > spaceAbove ? 'bottom' : 'top')
+    }
+
+    setTrigger(detected)
+    setTriggerActive(0)
+  }, [])
+
+  const closeTrigger = useCallback(() => {
+    setTrigger(null)
+    setTriggerItems([])
+    setTriggerActive(0)
+  }, [])
+
+  const triggerAdapter: Unstable_TriggerAdapter | null =
+    trigger?.kind === '@' ? at.adapter : trigger?.kind === '/' ? slash.adapter : null
+
+  useEffect(() => {
+    if (!trigger || !triggerAdapter?.search) {
+      setTriggerItems([])
+
+      return
+    }
+
+    setTriggerItems(triggerAdapter.search(trigger.query))
+  }, [trigger, triggerAdapter])
+
+  useEffect(() => {
+    setTriggerActive(idx => Math.min(idx, Math.max(0, triggerItems.length - 1)))
+  }, [triggerItems.length])
+
+  const triggerLoading = trigger?.kind === '@' ? at.loading : trigger?.kind === '/' ? slash.loading : false
+
+  const replaceTriggerWithChip = useCallback(
+    (item: Unstable_TriggerItem) => {
+      const editor = editorRef.current
+
+      if (!editor || !trigger) {
+        return
+      }
+
+      const serialized = hermesDirectiveFormatter.serialize(item)
+      const starter = serialized.endsWith(':')
+      const text = starter || serialized.endsWith(' ') ? serialized : `${serialized} `
+      const directive = !starter && serialized.match(/^@([^:]+):(.+)$/)
+
+      const finish = () => {
+        draftRef.current = composerPlainText(editor)
+        aui.composer().setText(draftRef.current)
+        requestEditFocus()
+        starter ? window.setTimeout(refreshTrigger, 0) : closeTrigger()
+      }
+
+      const sel = window.getSelection()
+      const range = sel?.rangeCount ? sel.getRangeAt(0) : null
+      const node = range?.startContainer
+      const offset = range?.startOffset ?? 0
+
+      if (!sel || !range || node?.nodeType !== Node.TEXT_NODE || offset < trigger.tokenLength) {
+        const current = composerPlainText(editor)
+        renderComposerContents(editor, `${current.slice(0, Math.max(0, current.length - trigger.tokenLength))}${text}`)
+        placeCaretEnd(editor)
+
+        return finish()
+      }
+
+      const replaceRange = document.createRange()
+      replaceRange.setStart(node, offset - trigger.tokenLength)
+      replaceRange.setEnd(node, offset)
+      replaceRange.deleteContents()
+
+      if (directive) {
+        const chip = refChipElement(directive[1], directive[2])
+        const space = document.createTextNode(' ')
+        const fragment = document.createDocumentFragment()
+        fragment.append(chip, space)
+        replaceRange.insertNode(fragment)
+
+        const caret = document.createRange()
+        caret.setStart(space, 1)
+        caret.collapse(true)
+        sel.removeAllRanges()
+        sel.addRange(caret)
+
+        return finish()
+      }
+
+      document.execCommand('insertText', false, text)
+      finish()
+    },
+    [aui, closeTrigger, refreshTrigger, requestEditFocus, trigger]
+  )
+
+  const insertDroppedRefs = useCallback(
+    (candidates: ReturnType<typeof extractDroppedFiles>) => {
+      const editor = editorRef.current
+
+      if (!editor) {
+        return false
+      }
+
+      const refs = candidates
+        .map(candidate => droppedFileInlineRef(candidate, cwd))
+        .filter((ref): ref is string => Boolean(ref))
+
+      const nextDraft = insertInlineRefsIntoEditor(editor, refs)
+
+      if (nextDraft === null) {
+        return false
+      }
+
+      draftRef.current = nextDraft
+      aui.composer().setText(nextDraft)
+      requestEditFocus()
+
+      return true
+    },
+    [aui, cwd, requestEditFocus]
+  )
+
+  const resetDragState = useCallback(() => {
+    dragDepthRef.current = 0
+    setDragActive(false)
+  }, [])
+
+  const handleDragEnter = (event: ReactDragEvent<HTMLElement>) => {
+    if (!dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
+      return
+    }
+
+    event.preventDefault()
+    dragDepthRef.current += 1
+
+    if (!dragActive) {
+      setDragActive(true)
+    }
+  }
+
+  const handleDragOver = (event: ReactDragEvent<HTMLElement>) => {
+    if (!dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
+      return
+    }
+
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleDragLeave = (event: ReactDragEvent<HTMLElement>) => {
+    event.preventDefault()
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+
+    if (dragDepthRef.current === 0) {
+      setDragActive(false)
+    }
+  }
+
+  const handleDrop = (event: ReactDragEvent<HTMLElement>) => {
+    if (!dragHasAttachments(event.dataTransfer, HERMES_PATHS_MIME)) {
+      return
+    }
+
+    const candidates = extractDroppedFiles(event.dataTransfer)
+
+    if (!candidates.length) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    resetDragState()
+
+    if (insertDroppedRefs(candidates)) {
+      triggerHaptic('selection')
+    }
+  }
+
+  const handleInput = (event: FormEvent<HTMLDivElement>) => {
+    const editor = event.currentTarget
+
+    if (editor.childNodes.length === 1 && editor.firstChild?.nodeName === 'BR') {
+      editor.replaceChildren()
+    }
+
+    syncDraftFromEditor(editor)
+    window.setTimeout(refreshTrigger, 0)
+  }
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const pastedText = event.clipboardData.getData('text')
+
+    if (!pastedText || DATA_IMAGE_URL_RE.test(pastedText.trim())) {
+      event.preventDefault()
+
+      return
+    }
+
+    event.preventDefault()
+    document.execCommand('insertText', false, pastedText)
+    syncDraftFromEditor(event.currentTarget)
+  }
+
+  const submitEdit = (editor: HTMLDivElement) => {
+    const nextDraft = syncDraftFromEditor(editor)
+
+    if (submitting || !nextDraft.trim()) {
+      return
+    }
+
+    setSubmitting(true)
+    aui.composer().send()
+  }
+
+  const handleEditBlur = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      const nextTarget = event.relatedTarget
+
+      if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+        return
+      }
+
+      window.setTimeout(() => {
+        const root = rootRef.current
+        const active = document.activeElement
+
+        if (submitting || (root && active && root.contains(active))) {
+          return
+        }
+
+        closeTrigger()
+        aui.composer().cancel()
+      }, 80)
+    },
+    [aui, closeTrigger, submitting]
+  )
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (trigger && triggerItems.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        setTriggerActive(idx => (idx + 1) % triggerItems.length)
+
+        return
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        setTriggerActive(idx => (idx - 1 + triggerItems.length) % triggerItems.length)
+
+        return
+      }
+
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault()
+        const item = triggerItems[triggerActive]
+
+        if (item) {
+          replaceTriggerWithChip(item)
+        }
+
+        return
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeTrigger()
+
+        return
+      }
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      aui.composer().cancel()
+
+      return
+    }
+
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      submitEdit(event.currentTarget)
+    }
+  }
+
+  return (
+    <ComposerPrimitive.Root className="contents" data-slot="aui_edit-composer-root">
+      <StickyHumanMessageContainer>
+        <div
+          className="composer-human-message-container human-execution-message-top relative flex w-full items-start rounded-md bg-(--ui-chat-surface-background)"
+          onBlur={handleEditBlur}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          ref={rootRef}
+        >
+          {trigger && (
+            <ComposerTriggerPopover
+              activeIndex={triggerActive}
+              items={triggerItems}
+              kind={trigger.kind}
+              loading={triggerLoading}
+              onHover={setTriggerActive}
+              onPick={replaceTriggerWithChip}
+              placement={triggerPlacement}
+            />
+          )}
+          <div
+            className={cn(
+              USER_BUBBLE_BASE_CLASS,
+              'ui-prompt-input__container relative border-(--ui-stroke-secondary) data-[expanded=true]:min-h-20',
+              COMPOSER_DROP_FADE_CLASS,
+              dragActive && COMPOSER_DROP_ACTIVE_CLASS
+            )}
+            data-expanded={expanded ? 'true' : undefined}
+          >
+            <div
+              aria-label="Edit message"
+              autoFocus
+              className={cn(
+                'ui-prompt-input-editor__input max-h-48 w-full resize-none bg-transparent p-0 pr-7 text-[length:var(--conversation-text-font-size)] leading-(--dt-line-height) text-foreground/95 outline-none',
+                'empty:before:content-[attr(data-placeholder)] empty:before:text-muted-foreground/60',
+                '**:data-ref-text:cursor-default',
+                expanded ? 'min-h-16' : 'min-h-[1.25rem]'
+              )}
+              contentEditable
+              data-placeholder="Edit message"
+              data-slot={RICH_INPUT_SLOT}
+              onBlur={() => window.setTimeout(closeTrigger, 80)}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              onFocus={() => markActiveComposer('edit')}
+              onInput={handleInput}
+              onKeyDown={handleKeyDown}
+              onKeyUp={() => window.setTimeout(refreshTrigger, 0)}
+              onMouseUp={refreshTrigger}
+              onPaste={handlePaste}
+              ref={editorRef}
+              role="textbox"
+              suppressContentEditableWarning
+            />
+            <ComposerPrimitive.Input className="sr-only" tabIndex={-1} unstable_focusOnScrollToBottom={false} />
+            <button
+              aria-label="Send edited message"
+              className={cn('absolute right-2 bottom-2 size-5', USER_ACTION_ICON_BUTTON_CLASS)}
+              disabled={!canSubmit || submitting}
+              onClick={() => {
+                const editor = editorRef.current
+
+                if (editor) {
+                  submitEdit(editor)
+                }
+              }}
+              title="Send edited message"
+              type="button"
+            >
+              {submitting ? StopGlyph : <Codicon name="arrow-up" size={USER_ACTION_ICON_SIZE} />}
+            </button>
+          </div>
+        </div>
+      </StickyHumanMessageContainer>
+    </ComposerPrimitive.Root>
+  )
+}

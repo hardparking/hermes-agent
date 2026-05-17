@@ -54,7 +54,13 @@ describe('subagent store', () => {
     )
     upsertSubagent(
       's1',
-      { status: 'running', subagent_id: 'a1', task_index: 0, tool_name: 'search_files', tool_preview: 'pattern=hermes' },
+      {
+        status: 'running',
+        subagent_id: 'a1',
+        task_index: 0,
+        tool_name: 'search_files',
+        tool_preview: 'pattern=hermes'
+      },
       false,
       'subagent.tool'
     )

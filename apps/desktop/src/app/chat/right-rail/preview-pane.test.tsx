@@ -13,7 +13,6 @@ describe('PreviewPane console state', () => {
 
     const rendered = render(
       <PreviewPane
-        onClose={vi.fn()}
         setTitlebarToolGroup={setTitlebarToolGroup}
         target={{
           kind: 'url',

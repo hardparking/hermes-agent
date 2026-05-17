@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import type { LucideIcon } from '@/lib/icons'
+import type { IconComponent } from '@/lib/icons'
 import { cn } from '@/lib/utils'
 
 interface OverlaySplitLayoutProps {
@@ -20,7 +20,7 @@ interface OverlayMainProps {
 
 interface OverlayNavItemProps {
   active: boolean
-  icon: LucideIcon
+  icon: IconComponent
   label: string
   onClick: () => void
   trailing?: ReactNode
@@ -30,7 +30,7 @@ export function OverlaySplitLayout({ children, className }: OverlaySplitLayoutPr
   return (
     <div
       className={cn(
-        'grid h-full min-h-0 flex-1 grid-cols-[13rem_minmax(0,1fr)] overflow-hidden rounded-[0.95rem] border border-[color-mix(in_srgb,var(--dt-border)_58%,transparent)] bg-[color-mix(in_srgb,var(--dt-card)_94%,transparent)] shadow-[inset_0_0.0625rem_0_color-mix(in_srgb,white_46%,transparent),0_0.5rem_1.5rem_-1rem_color-mix(in_srgb,#000_22%,transparent)] max-[760px]:grid-cols-1 dark:border-[color-mix(in_srgb,var(--dt-border)_36%,transparent)] dark:shadow-[inset_0_0.0625rem_0_color-mix(in_srgb,white_10%,transparent),0_0.5rem_1.5rem_-1rem_color-mix(in_srgb,#000_45%,transparent)]',
+        'grid h-full min-h-0 flex-1 grid-cols-[13rem_minmax(0,1fr)] overflow-hidden bg-transparent max-[47.5rem]:grid-cols-1',
         className
       )}
     >
@@ -43,7 +43,7 @@ export function OverlaySidebar({ children, className }: OverlaySidebarProps) {
   return (
     <aside
       className={cn(
-        'flex min-h-0 flex-col gap-0.5 overflow-y-auto border-r border-[color-mix(in_srgb,var(--dt-border)_48%,transparent)] bg-[color-mix(in_srgb,var(--dt-muted)_55%,var(--dt-card))] px-3.5 py-4',
+        'flex min-h-0 flex-col gap-0.5 overflow-y-auto bg-(--ui-sidebar-surface-background) px-2.5 py-3',
         className
       )}
     >
@@ -54,7 +54,7 @@ export function OverlaySidebar({ children, className }: OverlaySidebarProps) {
 
 export function OverlayMain({ children, className }: OverlayMainProps) {
   return (
-    <main className={cn('flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-4', className)}>{children}</main>
+    <main className={cn('flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-3', className)}>{children}</main>
   )
 }
 
@@ -62,10 +62,10 @@ export function OverlayNavItem({ active, icon: Icon, label, onClick, trailing }:
   return (
     <button
       className={cn(
-        'flex h-8 w-full items-center justify-start gap-2 rounded-md border px-2.5 text-left text-sm font-medium transition-colors',
+        'flex h-7 w-full items-center justify-start gap-2 rounded-md border px-2 text-left text-[length:var(--conversation-text-font-size)] font-normal transition-colors',
         active
-          ? 'border-[color-mix(in_srgb,var(--dt-primary)_34%,var(--dt-border))] bg-[color-mix(in_srgb,var(--dt-primary)_10%,var(--dt-card))] text-foreground shadow-[inset_0_0.0625rem_0_color-mix(in_srgb,white_40%,transparent)]'
-          : 'border-transparent bg-transparent text-foreground/78 hover:border-[color-mix(in_srgb,var(--dt-border)_60%,transparent)] hover:bg-[color-mix(in_srgb,var(--dt-card)_78%,transparent)] hover:text-foreground'
+          ? 'border-(--ui-stroke-tertiary) bg-(--ui-bg-tertiary) text-foreground'
+          : 'border-transparent bg-transparent text-(--ui-text-secondary) hover:bg-(--chrome-action-hover) hover:text-foreground'
       )}
       onClick={onClick}
       type="button"

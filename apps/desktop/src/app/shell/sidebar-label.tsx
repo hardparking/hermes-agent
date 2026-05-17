@@ -10,7 +10,7 @@ export function SidebarPanelLabel({ children, className, dotClassName, ...props 
   return (
     <span
       className={cn(
-        'flex min-w-0 items-center gap-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-sidebar-foreground/72',
+        'flex min-w-0 items-center gap-2 pl-2 text-[0.64rem] font-semibold uppercase tracking-[0.16em] text-(--theme-primary)',
         className
       )}
       {...props}

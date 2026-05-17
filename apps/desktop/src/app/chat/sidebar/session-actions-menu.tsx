@@ -1,10 +1,10 @@
-import { IconBookmark, IconBookmarkFilled, IconCircleX, IconFileDownload, IconPencil } from '@tabler/icons-react'
-import { useEffect, useRef, useState } from 'react'
 import type * as React from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
-import { CopyButton } from '@/components/ui/copy-button'
+import { Codicon } from '@/components/ui/codicon'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { writeClipboardText } from '@/components/ui/copy-button'
 import {
   Dialog,
   DialogContent,
@@ -13,111 +13,144 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { renameSession } from '@/hermes'
 import { triggerHaptic } from '@/lib/haptics'
 import { exportSession } from '@/lib/session-export'
-import { cn } from '@/lib/utils'
 import { notify, notifyError } from '@/store/notifications'
 import { setSessions } from '@/store/session'
 
-interface SessionActionsMenuProps extends Pick<
-  React.ComponentProps<typeof DropdownMenuContent>,
-  'align' | 'sideOffset'
-> {
-  children: ReactNode
-  title: string
+interface SessionActions {
   sessionId: string
+  title: string
   pinned?: boolean
   onPin?: () => void
   onDelete?: () => void
 }
 
-export function SessionActionsMenu({
-  children,
-  title,
-  sessionId,
-  pinned = false,
-  onPin,
-  onDelete,
-  align = 'end',
-  sideOffset = 6
-}: SessionActionsMenuProps) {
+type MenuItem = typeof DropdownMenuItem | typeof ContextMenuItem
+
+interface ItemSpec {
+  className?: string
+  disabled: boolean
+  icon: string
+  label: string
+  onSelect: (event: Event) => void
+  variant?: 'destructive'
+}
+
+function useSessionActions({ sessionId, title, pinned = false, onPin, onDelete }: SessionActions) {
   const [renameOpen, setRenameOpen] = useState(false)
+
+  const items: ItemSpec[] = [
+    {
+      disabled: !onPin,
+      icon: 'pin',
+      label: pinned ? 'Unpin' : 'Pin',
+      onSelect: () => {
+        triggerHaptic('selection')
+        onPin?.()
+      }
+    },
+    {
+      disabled: !sessionId,
+      icon: 'copy',
+      label: 'Copy ID',
+      onSelect: event => {
+        event.preventDefault()
+        triggerHaptic('selection')
+        void writeClipboardText(sessionId).catch(err => notifyError(err, 'Could not copy session ID'))
+      }
+    },
+    {
+      disabled: !sessionId,
+      icon: 'cloud-download',
+      label: 'Export',
+      onSelect: () => {
+        triggerHaptic('selection')
+        void exportSession(sessionId, { title })
+      }
+    },
+    {
+      disabled: !sessionId,
+      icon: 'edit',
+      label: 'Rename',
+      onSelect: () => {
+        triggerHaptic('selection')
+        setRenameOpen(true)
+      }
+    },
+    {
+      className: 'text-destructive focus:text-destructive',
+      disabled: !onDelete,
+      icon: 'trash',
+      label: 'Delete',
+      onSelect: () => {
+        triggerHaptic('warning')
+        onDelete?.()
+      },
+      variant: 'destructive'
+    }
+  ]
+
+  const renderItems = (Item: MenuItem) =>
+    items.map(({ className, disabled, icon, label, onSelect, variant }) => (
+      <Item className={className} disabled={disabled} key={label} onSelect={onSelect} variant={variant}>
+        <Codicon name={icon} size="0.875rem" />
+        <span>{label}</span>
+      </Item>
+    ))
+
+  const renameDialog = (
+    <RenameSessionDialog currentTitle={title} onOpenChange={setRenameOpen} open={renameOpen} sessionId={sessionId} />
+  )
+
+  return { renameDialog, renderItems }
+}
+
+interface SessionActionsMenuProps
+  extends SessionActions, Pick<React.ComponentProps<typeof DropdownMenuContent>, 'align' | 'sideOffset'> {
+  children: React.ReactNode
+}
+
+export function SessionActionsMenu({ children, align = 'end', sideOffset = 6, ...actions }: SessionActionsMenuProps) {
+  const { renameDialog, renderItems } = useSessionActions(actions)
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-        <DropdownMenuContent align={align} aria-label={`Actions for ${title}`} className="w-44" sideOffset={sideOffset}>
-          <DropdownMenuItem
-            className="gap-2.5 text-foreground focus:bg-accent [&_svg]:size-4"
-            disabled={!onPin}
-            onSelect={() => {
-              triggerHaptic('selection')
-              onPin?.()
-            }}
-          >
-            {pinned ? <IconBookmarkFilled /> : <IconBookmark />}
-            <span>{pinned ? 'Unpin' : 'Pin'}</span>
-          </DropdownMenuItem>
-          <CopyButton
-            appearance="menu-item"
-            className="gap-2.5 text-foreground focus:bg-accent [&_svg]:size-4"
-            disabled={!sessionId}
-            errorMessage="Could not copy session ID"
-            label="Copy ID"
-            text={sessionId}
-          />
-          <DropdownMenuItem
-            className="gap-2.5 text-foreground focus:bg-accent [&_svg]:size-4"
-            disabled={!sessionId}
-            onSelect={() => {
-              triggerHaptic('selection')
-              void exportSession(sessionId, { title })
-            }}
-          >
-            <IconFileDownload />
-            <span>Export</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="gap-2.5 text-foreground focus:bg-accent [&_svg]:size-4"
-            disabled={!sessionId}
-            onSelect={() => {
-              triggerHaptic('selection')
-              setRenameOpen(true)
-            }}
-          >
-            <IconPencil />
-            <span>Rename</span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator className="my-3" />
-          <DropdownMenuItem
-            className={cn(
-              'gap-2.5 text-foreground focus:bg-accent [&_svg]:size-4',
-              'text-destructive focus:text-destructive'
-            )}
-            disabled={!onDelete}
-            onSelect={() => {
-              triggerHaptic('warning')
-              onDelete?.()
-            }}
-            variant="destructive"
-          >
-            <IconCircleX />
-            <span>Delete</span>
-          </DropdownMenuItem>
+        <DropdownMenuContent
+          align={align}
+          aria-label={`Actions for ${actions.title}`}
+          className="w-40"
+          sideOffset={sideOffset}
+        >
+          {renderItems(DropdownMenuItem)}
         </DropdownMenuContent>
       </DropdownMenu>
+      {renameDialog}
+    </>
+  )
+}
 
-      <RenameSessionDialog currentTitle={title} onOpenChange={setRenameOpen} open={renameOpen} sessionId={sessionId} />
+interface SessionContextMenuProps extends SessionActions {
+  children: React.ReactNode
+}
+
+export function SessionContextMenu({ children, ...actions }: SessionContextMenuProps) {
+  const { renameDialog, renderItems } = useSessionActions(actions)
+
+  return (
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+        <ContextMenuContent aria-label={`Actions for ${actions.title}`} className="w-40">
+          {renderItems(ContextMenuItem)}
+        </ContextMenuContent>
+      </ContextMenu>
+      {renameDialog}
     </>
   )
 }
@@ -160,7 +193,7 @@ function RenameSessionDialog({ open, onOpenChange, sessionId, currentTitle }: Re
       const result = await renameSession(sessionId, next)
       const finalTitle = result.title || next || ''
       setSessions(prev => prev.map(s => (s.id === sessionId ? { ...s, title: finalTitle || null } : s)))
-      notify({ kind: 'success', message: 'Renamed', durationMs: 2_000 })
+      notify({ durationMs: 2_000, kind: 'success', message: 'Renamed' })
       onOpenChange(false)
     } catch (err) {
       notifyError(err, 'Rename failed')

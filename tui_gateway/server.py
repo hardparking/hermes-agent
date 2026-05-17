@@ -707,6 +707,12 @@ def _set_session_cwd(session: dict, cwd: str) -> str:
         raise ValueError(f"working directory does not exist: {cwd}")
     session["cwd"] = resolved
     _register_session_cwd(session)
+    db = _get_db()
+    if db is not None:
+        try:
+            db.update_session_cwd(session.get("session_key", ""), resolved)
+        except Exception:
+            logger.debug("failed to persist session cwd", exc_info=True)
     try:
         from tools.terminal_tool import cleanup_vm
 
@@ -2164,6 +2170,16 @@ def _init_session(sid: str, key: str, agent, history: list, cols: int = 80):
         # session (stdio for Ink, JSON-RPC WS for the dashboard sidebar).
         "transport": current_transport() or _stdio_transport,
     }
+    db = _get_db()
+    if db is not None:
+        row = db.get_session(key)
+        if row and row.get("cwd"):
+            _sessions[sid]["cwd"] = row["cwd"]
+        else:
+            try:
+                db.update_session_cwd(key, _sessions[sid]["cwd"])
+            except Exception:
+                logger.debug("failed to persist resumed session cwd", exc_info=True)
     _register_session_cwd(_sessions[sid])
     try:
         _sessions[sid]["slash_worker"] = _SlashWorker(
@@ -2450,6 +2466,17 @@ def _(rid, params: dict) -> dict:
         "transport": current_transport() or _stdio_transport,
     }
     _register_session_cwd(_sessions[sid])
+    db = _get_db()
+    if db is not None:
+        try:
+            db.create_session(
+                key,
+                source="tui",
+                model=_resolve_model(),
+                cwd=_sessions[sid]["cwd"],
+            )
+        except Exception:
+            logger.debug("failed to pre-create desktop session row", exc_info=True)
 
     # Return the lightweight session immediately so Ink can paint the composer
     # + skeleton panel, then build the real AIAgent just after this response is
@@ -3045,7 +3072,11 @@ def _(rid, params: dict) -> dict:
                 else f"{current} (branch)"
             )
         db.create_session(
-            new_key, source="tui", model=_resolve_model(), parent_session_id=old_key
+            new_key,
+            source="tui",
+            model=_resolve_model(),
+            parent_session_id=old_key,
+            cwd=_session_cwd(session),
         )
         for msg in history:
             db.append_message(
@@ -5604,7 +5635,13 @@ def _(rid, params: dict) -> dict:
         # editors like Cursor / VS Code do for Cmd-P. Path-ish queries (with
         # `/`, `./`, `~/`, `/abs`) fall through to the directory-listing
         # path so explicit navigation intent is preserved.
-        if is_context and path_part and "/" not in path_part and prefix_tag != "folder":
+        if (
+            is_context
+            and path_part
+            and len(path_part.strip()) >= 2
+            and "/" not in path_part
+            and prefix_tag != "folder"
+        ):
             ranked: list[tuple[tuple[int, int], str, str]] = []
             for rel in _list_repo_files(root):
                 basename = os.path.basename(rel)
@@ -5647,6 +5684,8 @@ def _(rid, params: dict) -> dict:
         match_lower = match.lower()
         for entry in sorted(os.listdir(search_dir)):
             if match and not entry.lower().startswith(match_lower):
+                continue
+            if is_context and entry in _FUZZY_FALLBACK_EXCLUDES:
                 continue
             if is_context and not prefix_tag and entry.startswith("."):
                 continue

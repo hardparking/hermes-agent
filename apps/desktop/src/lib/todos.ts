@@ -16,6 +16,7 @@ function parseArray(value: unknown[]): TodoItem[] {
     if (!isRecord(item) || !isStatus(item.status)) {
       return []
     }
+
     const id = String(item.id ?? '').trim()
     const content = String(item.content ?? '').trim()
 

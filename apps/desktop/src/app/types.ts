@@ -1,5 +1,6 @@
+import type * as React from 'react'
+
 import type { ChatMessage } from '@/lib/chat-messages'
-import type { LucideIcon } from '@/lib/icons'
 
 export interface ContextSuggestion {
   text: string
@@ -51,18 +52,12 @@ export type CommandDispatchResponse =
   | SkillCommandDispatchResponse
   | SendCommandDispatchResponse
 
-export type SidebarNavId =
-  | 'artifacts'
-  | 'command-center'
-  | 'messaging'
-  | 'new-session'
-  | 'settings'
-  | 'skills'
+export type SidebarNavId = 'artifacts' | 'command-center' | 'messaging' | 'new-session' | 'settings' | 'skills'
 
 export interface SidebarNavItem {
   id: SidebarNavId
   label: string
-  icon: LucideIcon
+  icon: React.ComponentType<{ className?: string }>
   route?: string
   action?: 'new-session'
 }
@@ -70,6 +65,8 @@ export interface SidebarNavItem {
 export interface ClientSessionState {
   storedSessionId: string | null
   messages: ChatMessage[]
+  branch: string
+  cwd: string
   busy: boolean
   awaitingResponse: boolean
   streamId: string | null

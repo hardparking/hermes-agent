@@ -23,7 +23,8 @@ import {
   $composerAttachments,
   addComposerAttachment,
   clearComposerAttachments,
-  type ComposerAttachment
+  type ComposerAttachment,
+  terminalContextBlocksFromDraft
 } from '@/store/composer'
 import { clearNotifications, notify, notifyError } from '@/store/notifications'
 import { requestDesktopOnboarding } from '@/store/onboarding'
@@ -51,6 +52,12 @@ function isProviderSetupError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
 
   return isProviderSetupErrorMessage(message)
+}
+
+function inlineErrorMessage(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : fallback
+
+  return (raw.match(/Error invoking remote method '[^']+': Error: (.+)$/)?.[1] ?? raw).replace(/^Error:\s*/, '').trim()
 }
 
 interface PromptActionsOptions {
@@ -202,15 +209,19 @@ export function usePromptActions({
       const visibleText = rawText.trim()
       const usingComposerAttachments = !options?.attachments
       const attachments = options?.attachments ?? $composerAttachments.get()
+
       const contextRefs = attachments
         .map(a => a.refText)
         .filter(Boolean)
         .join('\n')
+
+      const terminalContextBlocks = terminalContextBlocksFromDraft(rawText).join('\n\n')
       const hasImage = attachments.some(a => a.kind === 'image')
       const attachmentRefs = attachments.map(attachmentDisplayText).filter((r): r is string => Boolean(r))
 
       const text =
-        [contextRefs, visibleText].filter(Boolean).join('\n\n') || (hasImage ? 'What do you see in this image?' : '')
+        [contextRefs, terminalContextBlocks, visibleText].filter(Boolean).join('\n\n') ||
+        (hasImage ? 'What do you see in this image?' : '')
 
       if (!text || busyRef.current) {
         return false
@@ -311,12 +322,32 @@ export function usePromptActions({
         })
         await requestGateway('prompt.submit', { session_id: sessionId, text })
 
-        if (usingComposerAttachments) clearComposerAttachments()
+        if (usingComposerAttachments) {
+          clearComposerAttachments()
+        }
 
         return true
       } catch (err) {
+        const message = inlineErrorMessage(err, 'Prompt failed')
+
         releaseBusy()
-        updateSessionState(sessionId, state => ({ ...state, busy: false, awaitingResponse: false }))
+        updateSessionState(sessionId, state => ({
+          ...state,
+          messages: [
+            ...state.messages,
+            {
+              id: `assistant-error-${Date.now()}`,
+              role: 'assistant',
+              parts: [],
+              error: message || 'Prompt failed',
+              branchGroupId: state.pendingBranchGroup ?? undefined
+            }
+          ],
+          busy: false,
+          awaitingResponse: false,
+          pendingBranchGroup: null,
+          sawAssistantPayload: true
+        }))
 
         if (isProviderSetupError(err)) {
           requestDesktopOnboarding('Add a provider credential before sending your first message.')
@@ -325,6 +356,7 @@ export function usePromptActions({
         }
 
         notifyError(err, 'Prompt failed')
+
         return false
       }
     },
@@ -681,10 +713,16 @@ export function usePromptActions({
         return
       }
 
-      const truncate_before_user_ordinal = visibleUserOrdinal(messages, sourceIndex)
+      // Failed turn: optimistic user msg never reached the gateway, so truncating
+      // by ordinal would 422. Submit as a plain resend instead.
+      const nextMessage = messages[sourceIndex + 1]
+      const isFailedTurn = nextMessage?.role === 'assistant' && Boolean(nextMessage.error)
       const editedMessage: ChatMessage = { ...source, parts: [textPart(text)] }
 
       clearNotifications()
+      busyRef.current = true
+      setBusy(true)
+      setAwaitingResponse(true)
       updateSessionState(sessionId, state => ({
         ...state,
         busy: true,
@@ -695,14 +733,39 @@ export function usePromptActions({
         messages: [...state.messages.slice(0, sourceIndex), editedMessage]
       }))
 
+      const submit = (truncateOrdinal?: number) =>
+        requestGateway('prompt.submit', {
+          session_id: sessionId,
+          text,
+          ...(truncateOrdinal !== undefined && { truncate_before_user_ordinal: truncateOrdinal })
+        })
+
+      const isStaleTargetError = (err: unknown) =>
+        /no longer in session history|not in session history/i.test(err instanceof Error ? err.message : String(err))
+
       try {
-        await requestGateway('prompt.submit', { session_id: sessionId, text, truncate_before_user_ordinal })
+        await submit(isFailedTurn ? undefined : visibleUserOrdinal(messages, sourceIndex))
       } catch (err) {
+        let surfaced = err
+
+        if (!isFailedTurn && isStaleTargetError(err)) {
+          try {
+            await submit()
+
+            return
+          } catch (retryErr) {
+            surfaced = retryErr
+          }
+        }
+
+        busyRef.current = false
+        setBusy(false)
+        setAwaitingResponse(false)
         updateSessionState(sessionId, state => ({ ...state, busy: false, awaitingResponse: false }))
-        notifyError(err, 'Edit failed')
+        notifyError(surfaced, 'Edit failed')
       }
     },
-    [activeSessionId, activeSessionIdRef, requestGateway, updateSessionState]
+    [activeSessionId, activeSessionIdRef, busyRef, requestGateway, updateSessionState]
   )
 
   const handleThreadMessagesChange = useCallback(

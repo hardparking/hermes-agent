@@ -1,7 +1,7 @@
 import { Select as SelectPrimitive } from 'radix-ui'
 import * as React from 'react'
 
-import { CheckIcon, ChevronDownIcon } from '@/lib/icons'
+import { Codicon } from '@/components/ui/codicon'
 import { cn } from '@/lib/utils'
 
 function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -20,7 +20,7 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-60" />
+        <Codicon className="opacity-60" name="chevron-down" size="1rem" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -74,7 +74,7 @@ function SelectItem({ className, children, ...props }: React.ComponentProps<type
     >
       <span className="absolute right-2 flex size-3.5 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
-          <CheckIcon className="size-4" />
+          <Codicon name="check" size="1rem" />
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

@@ -29,6 +29,14 @@ declare global {
       fetchLinkTitle: (url: string) => Promise<string>
       readDir: (path: string) => Promise<HermesReadDirResult>
       gitRoot?: (path: string) => Promise<string | null>
+      terminal: {
+        dispose: (id: string) => Promise<boolean>
+        onData: (id: string, callback: (payload: string) => void) => () => void
+        onExit: (id: string, callback: (payload: HermesTerminalExit) => void) => () => void
+        resize: (id: string, size: { cols: number; rows: number }) => Promise<boolean>
+        start: (options?: { cols?: number; cwd?: string; rows?: number }) => Promise<HermesTerminalSession>
+        write: (id: string, data: string) => Promise<boolean>
+      }
       onClosePreviewRequested?: (callback: () => void) => () => void
       onOpenUpdatesRequested?: (callback: () => void) => () => void
       onWindowStateChanged?: (callback: (payload: HermesWindowState) => void) => () => void
@@ -45,6 +53,17 @@ declare global {
       }
     }
   }
+}
+
+export interface HermesTerminalSession {
+  cwd: string
+  id: string
+  shell: string
+}
+
+export interface HermesTerminalExit {
+  code: number | null
+  signal: string | null
 }
 
 export interface DesktopVersionInfo {

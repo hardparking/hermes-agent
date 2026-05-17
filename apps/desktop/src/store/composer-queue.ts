@@ -14,7 +14,10 @@ type QueueState = Record<string, QueuedPromptEntry[]>
 const STORAGE_KEY = 'hermes.desktop.composerQueue.v1'
 
 const load = (): QueueState => {
-  if (typeof window === 'undefined') return {}
+  if (typeof window === 'undefined') {
+    return {}
+  }
+
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     const parsed = raw ? JSON.parse(raw) : null
@@ -26,10 +29,16 @@ const load = (): QueueState => {
 }
 
 const save = (state: QueueState) => {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined') {
+    return
+  }
+
   try {
-    if (Object.keys(state).length === 0) window.localStorage.removeItem(STORAGE_KEY)
-    else window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    if (Object.keys(state).length === 0) {
+      window.localStorage.removeItem(STORAGE_KEY)
+    } else {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    }
   } catch {
     // best-effort: storage may be unavailable, queue still works in-memory
   }
@@ -41,8 +50,11 @@ const writeSession = (sid: string, queue: QueuedPromptEntry[]) => {
   const current = $queuedPromptsBySession.get()
   const next = { ...current }
 
-  if (queue.length === 0) delete next[sid]
-  else next[sid] = queue
+  if (queue.length === 0) {
+    delete next[sid]
+  } else {
+    next[sid] = queue
+  }
 
   $queuedPromptsBySession.set(next)
   save(next)
@@ -72,7 +84,9 @@ export const enqueueQueuedPrompt = (
 ): null | QueuedPromptEntry => {
   const sid = sidOf(key)
 
-  if (!sid) return null
+  if (!sid) {
+    return null
+  }
 
   const entry: QueuedPromptEntry = {
     id: nextId(),
@@ -89,11 +103,15 @@ export const enqueueQueuedPrompt = (
 export const dequeueQueuedPrompt = (key: string | null | undefined): null | QueuedPromptEntry => {
   const sid = sidOf(key)
 
-  if (!sid) return null
+  if (!sid) {
+    return null
+  }
 
   const [head, ...rest] = queueFor(sid)
 
-  if (!head) return null
+  if (!head) {
+    return null
+  }
 
   writeSession(sid, rest)
 
@@ -103,12 +121,16 @@ export const dequeueQueuedPrompt = (key: string | null | undefined): null | Queu
 export const removeQueuedPrompt = (key: string | null | undefined, id: string): boolean => {
   const sid = sidOf(key)
 
-  if (!sid) return false
+  if (!sid) {
+    return false
+  }
 
   const queue = queueFor(sid)
   const next = queue.filter(e => e.id !== id)
 
-  if (next.length === queue.length) return false
+  if (next.length === queue.length) {
+    return false
+  }
 
   writeSession(sid, next)
 
@@ -122,24 +144,32 @@ export const updateQueuedPrompt = (
 ): boolean => {
   const sid = sidOf(key)
 
-  if (!sid) return false
+  if (!sid) {
+    return false
+  }
 
   const queue = queueFor(sid)
   let changed = false
 
   const next = queue.map(entry => {
-    if (entry.id !== id) return entry
+    if (entry.id !== id) {
+      return entry
+    }
 
     const attachments = update.attachments ? cloneAttachments(update.attachments) : entry.attachments
 
-    if (entry.text === update.text && !update.attachments) return entry
+    if (entry.text === update.text && !update.attachments) {
+      return entry
+    }
 
     changed = true
 
     return { ...entry, text: update.text, attachments }
   })
 
-  if (!changed) return false
+  if (!changed) {
+    return false
+  }
 
   writeSession(sid, next)
 
@@ -152,7 +182,9 @@ export const updateQueuedPromptText = (key: string | null | undefined, id: strin
 export const clearQueuedPrompts = (key: string | null | undefined) => {
   const sid = sidOf(key)
 
-  if (!sid || !(sid in $queuedPromptsBySession.get())) return
+  if (!sid || !(sid in $queuedPromptsBySession.get())) {
+    return
+  }
 
   writeSession(sid, [])
 }

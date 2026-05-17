@@ -49,7 +49,7 @@ export function StatusbarControls({ className, leftItems = [], items = [], ...pr
   return (
     <footer
       className={cn(
-        'flex h-7 shrink-0 items-stretch justify-between gap-2 border-t border-border/55 bg-[color-mix(in_srgb,var(--dt-muted)_45%,var(--dt-card))] px-1 py-0 text-muted-foreground/95 [-webkit-app-region:no-drag]',
+        'flex h-5 shrink-0 items-stretch justify-between gap-2 border-t border-(--ui-stroke-tertiary) bg-(--ui-sidebar-surface-background) px-1 py-0 text-(--ui-text-tertiary) [-webkit-app-region:no-drag]',
         className
       )}
       {...props}
@@ -89,7 +89,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate: 
         <DropdownMenuTrigger asChild>
           <button
             className={cn(
-              'inline-flex h-full cursor-pointer items-center gap-1 rounded-none px-1.5 text-[0.68rem] text-muted-foreground/95 transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45',
+              'inline-flex h-full cursor-pointer items-center gap-1 rounded-none px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45',
               item.className
             )}
             disabled={item.disabled}
@@ -150,7 +150,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate: 
     return (
       <div
         className={cn(
-          'inline-flex h-full items-center gap-1 px-1.5 text-[0.68rem] text-muted-foreground/90',
+          'inline-flex h-full items-center gap-1 px-1.5 text-[0.6875rem] text-(--ui-text-tertiary)',
           item.className
         )}
       >
@@ -163,7 +163,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate: 
     return (
       <a
         className={cn(
-          'inline-flex h-full cursor-pointer items-center gap-1 rounded-none px-1.5 text-[0.68rem] text-muted-foreground/95 transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45',
+          'inline-flex h-full cursor-pointer items-center gap-1 rounded-none px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45',
           item.className
         )}
         href={item.href}
@@ -179,7 +179,7 @@ function StatusbarItemView({ item, navigate }: { item: StatusbarItem; navigate: 
   return (
     <button
       className={cn(
-        'inline-flex h-full cursor-pointer items-center gap-1 rounded-none px-1.5 text-[0.68rem] text-muted-foreground/95 transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45',
+        'inline-flex h-full cursor-pointer items-center gap-1 rounded-none px-1.5 text-[0.6875rem] text-(--ui-text-tertiary) transition-colors hover:bg-(--chrome-action-hover) hover:text-foreground disabled:cursor-default disabled:opacity-45',
         item.className
       )}
       disabled={item.disabled}

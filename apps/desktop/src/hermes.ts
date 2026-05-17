@@ -394,9 +394,7 @@ export function getProfiles(): Promise<ProfilesResponse> {
   })
 }
 
-export function createProfile(
-  body: ProfileCreatePayload
-): Promise<{ name: string; ok: boolean; path: string }> {
+export function createProfile(body: ProfileCreatePayload): Promise<{ name: string; ok: boolean; path: string }> {
   return window.hermesDesktop.api<{ name: string; ok: boolean; path: string }>({
     path: '/api/profiles',
     method: 'POST',
@@ -404,10 +402,7 @@ export function createProfile(
   })
 }
 
-export function renameProfile(
-  name: string,
-  newName: string
-): Promise<{ name: string; ok: boolean; path: string }> {
+export function renameProfile(name: string, newName: string): Promise<{ name: string; ok: boolean; path: string }> {
   return window.hermesDesktop.api<{ name: string; ok: boolean; path: string }>({
     path: `/api/profiles/${encodeURIComponent(name)}`,
     method: 'PATCH',

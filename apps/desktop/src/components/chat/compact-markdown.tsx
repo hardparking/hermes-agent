@@ -41,14 +41,18 @@ function tagged<T extends keyof typeof TAG_CLASSES>(Tag: T) {
 function MarkdownAnchor({ children, className, href, ...rest }: ComponentProps<'a'>) {
   if (!href || !/^https?:\/\//i.test(href)) {
     return (
-      <a className={cn('font-medium underline underline-offset-4 decoration-current', className)} href={href} {...rest}>
+      <a
+        className={cn('font-medium underline underline-offset-4 decoration-current/20', className)}
+        href={href}
+        {...rest}
+      >
         {children}
       </a>
     )
   }
 
   return (
-    <ExternalLink className={cn('decoration-current', className)} href={href} showExternalIcon={false}>
+    <ExternalLink className={cn('decoration-current/20', className)} href={href} showExternalIcon={false}>
       {children}
       <ExternalLinkIcon />
     </ExternalLink>

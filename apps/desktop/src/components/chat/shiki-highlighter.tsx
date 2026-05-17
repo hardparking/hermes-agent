@@ -4,72 +4,89 @@ import type { SyntaxHighlighterProps } from '@assistant-ui/react-streamdown'
 import type { FC } from 'react'
 import ShikiHighlighter from 'react-shiki'
 
-import { isLikelyProseCodeBlock } from '@/lib/markdown-code'
+import {
+  CodeCard,
+  CodeCardBody,
+  CodeCardHeader,
+  CodeCardIcon,
+  CodeCardSubtitle,
+  CodeCardTitle
+} from '@/components/chat/code-card'
+import { CopyButton } from '@/components/ui/copy-button'
+import { codiconForLanguage, isLikelyProseCodeBlock, sanitizeLanguageTag } from '@/lib/markdown-code'
 
 /**
- * assistant-ui's recommended `SyntaxHighlighter` slot.
+ * Streamdown's code adapter renders header + body as inline siblings, so we
+ * own the wrapping `<CodeCard>` here and neutralize the upstream
+ * `data-streamdown="code-block"` chrome from styles.css. Anything that wants
+ * a card-shaped code surface should compose `CodeCard*` directly.
  *
- * Uses the full `react-shiki` bundle so all `bundledLanguages` work
- * (rust, go, swift, kotlin, sql, etc.) — the `/web` subpath only ships
- * common web languages and silently falls back to plain text otherwise.
- *
- * Theme switching is automatic via the CSS `color-scheme` on `:root`
- * (set from the desktop theme provider).
- *
- * `showLanguage` is disabled because we render our own `CodeHeader`;
- * leaving it on causes the language to appear twice.
+ * `react-shiki` full bundle so all `bundledLanguages` work; theme switches
+ * follow the document `color-scheme` via `defaultColor="light-dark()"`.
  */
 interface HermesSyntaxHighlighterProps extends SyntaxHighlighterProps {
   defer?: boolean
 }
 
+const SHIKI_THEME = { dark: 'github-dark-default', light: 'github-light-default' } as const
+
 export const SyntaxHighlighter: FC<HermesSyntaxHighlighterProps> = ({
-  components: { Pre, Code: _UnusedCode },
+  components: { Pre },
   language,
   code,
   defer = false
 }) => {
-  const preClassName =
-    'aui-shiki m-0 overflow-hidden rounded-b-md border border-t-0 border-border bg-card font-mono text-sm leading-relaxed [&_pre]:m-0 [&_pre]:overflow-x-auto [&_pre]:bg-transparent! [&_pre]:px-4 [&_pre]:py-3 [&_pre]:font-mono [&_pre]:leading-relaxed'
-
-  // Streamdown may hand us fence contents with edge newlines. Strip blank
-  // fence padding without touching indentation on the first real line.
   const trimmed = (code ?? '').replace(/^\n+/, '').trimEnd()
 
-  // Avoid rendering an empty code card while Streamdown is still deciding
-  // whether a transient/incomplete fence is real markdown.
+  // Streaming may hand us empty/incomplete fences — render nothing rather
+  // than a transient empty card.
   if (!trimmed.trim()) {
     return null
   }
 
   if (isLikelyProseCodeBlock(language, trimmed)) {
-    return <div className="whitespace-pre-wrap wrap-anywhere text-foreground">{trimmed}</div>
+    return <div className="aui-prose-fence whitespace-pre-wrap wrap-anywhere text-foreground">{trimmed}</div>
   }
 
-  if (defer) {
-    return (
-      <Pre className={preClassName}>
-        <code className="block whitespace-pre">{trimmed}</code>
-      </Pre>
-    )
-  }
+  const cleanLanguage = sanitizeLanguageTag(language || '')
+  const label = cleanLanguage && cleanLanguage !== 'unknown' ? cleanLanguage : ''
 
   return (
-    <Pre className={preClassName}>
-      <ShikiHighlighter
-        addDefaultStyles={false}
-        as="div"
-        defaultColor="light-dark()"
-        delay={120}
-        language={language || 'text'}
-        showLanguage={false}
-        theme={{
-          light: 'github-light-default',
-          dark: 'github-dark-default'
-        }}
-      >
-        {trimmed}
-      </ShikiHighlighter>
-    </Pre>
+    <CodeCard>
+      <CodeCardHeader>
+        <CodeCardTitle>
+          <CodeCardIcon name={codiconForLanguage(label)} />
+          Code
+          {label && <CodeCardSubtitle> · {label}</CodeCardSubtitle>}
+        </CodeCardTitle>
+        <CopyButton
+          appearance="inline"
+          className="-my-1 -mr-1 h-5 px-1 opacity-55 hover:opacity-100"
+          iconClassName="size-2.5"
+          label="Copy code"
+          showLabel={false}
+          text={trimmed}
+        />
+      </CodeCardHeader>
+      <CodeCardBody>
+        <Pre className="aui-shiki m-0 overflow-hidden bg-transparent p-0">
+          {defer ? (
+            <code className="block whitespace-pre">{trimmed}</code>
+          ) : (
+            <ShikiHighlighter
+              addDefaultStyles={false}
+              as="div"
+              defaultColor="light-dark()"
+              delay={120}
+              language={language || 'text'}
+              showLanguage={false}
+              theme={SHIKI_THEME}
+            >
+              {trimmed}
+            </ShikiHighlighter>
+          )}
+        </Pre>
+      </CodeCardBody>
+    </CodeCard>
   )
 }

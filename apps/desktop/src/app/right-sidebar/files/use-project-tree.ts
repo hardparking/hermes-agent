@@ -227,7 +227,7 @@ export function useProjectTree(cwd: string): UseProjectTreeResult {
       openState: state.cwd === cwd ? state.openState : {},
       refreshRoot,
       rootError: state.cwd === cwd ? state.rootError : null,
-      rootLoading: state.cwd === cwd ? state.rootLoading : false,
+      rootLoading: state.cwd === cwd ? state.rootLoading : Boolean(cwd),
       setNodeOpen
     }),
     [
