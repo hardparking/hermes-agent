@@ -14,7 +14,12 @@ export function Header(props: { store: SessionStore }) {
   return (
     <box style={{ flexShrink: 0 }}>
       <text selectable={false}>
-        <b>{theme().brand.name}</b>
+        {/* brand glyph in accent + name in primary/bold so the header reads as the
+            top of the hierarchy, not just another text line (item 8). */}
+        <span style={{ fg: theme().color.accent }}>{`${theme().brand.icon} `}</span>
+        <span style={{ fg: theme().color.primary }}>
+          <b>{theme().brand.name}</b>
+        </span>
         <span style={{ fg: theme().color.muted }}> · opentui · </span>
         <Show when={props.store.state.ready} fallback={<span style={{ fg: theme().color.muted }}>connecting…</span>}>
           <span style={{ fg: theme().color.ok }}>ready</span>

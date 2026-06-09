@@ -41,15 +41,18 @@ export function MessageLine(props: { message: Message }) {
   const m = () => props.message
   const glyph = () => (m().role === 'assistant' ? theme().brand.icon : m().role === 'user' ? theme().brand.prompt : '·')
   const glyphFg = () =>
-    m().role === 'assistant' ? theme().color.accent : m().role === 'user' ? theme().color.prompt : theme().color.muted
+    m().role === 'assistant' ? theme().color.accent : m().role === 'user' ? theme().color.accent : theme().color.muted
   const hasParts = () => (m().parts?.length ?? 0) > 0
 
   return (
     <box style={{ flexDirection: 'row', flexShrink: 0, marginTop: m().role === 'user' ? 1 : 0 }}>
       <box style={{ flexShrink: 0, width: GUTTER }}>
-        {/* the role glyph is decorative — exclude it from mouse selection (item 4) */}
+        {/* the role glyph is decorative — exclude it from mouse selection (item 4).
+            Bold so the user `❯` / assistant `⚕` turn boundaries pop (item 8). */}
         <text selectable={false}>
-          <span style={{ fg: glyphFg() }}>{glyph()}</span>
+          <span style={{ fg: glyphFg() }}>
+            <b>{glyph()}</b>
+          </span>
         </text>
       </box>
       {/* gap owns ALL inter-part spacing (item 5) — uniform 1 line between text /

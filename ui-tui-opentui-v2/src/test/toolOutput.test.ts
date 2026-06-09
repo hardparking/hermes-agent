@@ -4,7 +4,21 @@
  */
 import { describe, expect, test } from 'bun:test'
 
-import { collapseToolOutput, stripOmittedNote, stripToolEnvelope, truncate } from '../logic/toolOutput.ts'
+import { collapseToolOutput, stripAnsi, stripOmittedNote, stripToolEnvelope, truncate } from '../logic/toolOutput.ts'
+
+describe('stripAnsi (item 8 - gateway slash/notice text is ANSI-colored for Ink)', () => {
+  const ESC = String.fromCharCode(27)
+  test('removes SGR color codes, keeps the text', () => {
+    expect(stripAnsi(`${ESC}[1;38;2;255;215;0m\u2713 Reasoning display: ON${ESC}[0m`)).toBe('\u2713 Reasoning display: ON')
+  })
+  test('removes italic + mouse sequences', () => {
+    expect(stripAnsi(`${ESC}[2;3m  Model thinking shown.${ESC}[0m`)).toBe('  Model thinking shown.')
+    expect(stripAnsi(`hi${ESC}[<0;6;8mthere`)).toBe('hithere')
+  })
+  test('leaves plain text untouched', () => {
+    expect(stripAnsi('just text')).toBe('just text')
+  })
+})
 
 describe('stripOmittedNote (item 2 — peel the gateway verbose-tail label)', () => {
   test('extracts the lines/chars note and returns the clean body', () => {

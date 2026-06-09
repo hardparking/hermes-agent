@@ -13,6 +13,17 @@ export interface Collapsed {
   truncated: boolean
 }
 
+// CSI escape sequences (SGR colors, cursor, mouse). The gateway colors some
+// slash/notice text with raw ANSI for the Ink TUI, which interprets it; the
+// native `<text>` renders byte-for-byte, so those codes would leak as literal
+// glyphs. Strip them on display (item 8).
+// eslint-disable-next-line no-control-regex
+const ANSI_CSI = /[\u001b\u009b]\[[0-9;:?<>=]*[ -/]*[@-~]/g
+/** Remove ANSI/SGR/mouse escape sequences so they don't render as literal text. */
+export function stripAnsi(s: string): string {
+  return (s ?? '').replace(ANSI_CSI, '')
+}
+
 /** Truncate a single line to `width` columns, adding an ellipsis when cut. */
 export function truncate(s: string, width: number): string {
   const w = Math.max(1, width)

@@ -23,7 +23,9 @@ export function HomeHint() {
     <box style={{ flexDirection: 'column', flexShrink: 0, paddingLeft: 1, marginTop: 1 }}>
       <text selectable={false}>
         <span style={{ fg: theme().color.accent }}>{theme().brand.icon} </span>
-        <b>{theme().brand.name}</b>
+        <span style={{ fg: theme().color.primary }}>
+          <b>{theme().brand.name}</b>
+        </span>
       </text>
       <text selectable={false}>
         <span style={{ fg: theme().color.muted }}>{theme().brand.welcome}</span>
@@ -32,7 +34,7 @@ export function HomeHint() {
         <For each={COMMANDS}>
           {([cmd, desc]) => (
             <text selectable={false}>
-              <span style={{ fg: theme().color.label }}>{cmd.padEnd(11)}</span>
+              <span style={{ fg: theme().color.accent }}>{cmd.padEnd(12)}</span>
               <span style={{ fg: theme().color.muted }}>{desc}</span>
             </text>
           )}

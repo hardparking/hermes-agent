@@ -111,7 +111,8 @@ export function StatusBar(props: { store: SessionStore }) {
             <span style={{ fg: theme().color.muted }}>{effort()}</span>
           </Show>
           <Show when={showBar()}>
-            <span style={{ fg: theme().color.muted }}>{'   '}</span>
+            {/* a dim divider segments the bar into scannable fields (item 8) */}
+            <span style={{ fg: theme().color.border }}>{'  │  '}</span>
             <span style={{ fg: ctxColor(pct()!) }}>{ctxBar(pct()!, CTX_BAR_CELLS)}</span>
             <span style={{ fg: theme().color.statusFg }}>{` ${pct()}%`}</span>
           </Show>

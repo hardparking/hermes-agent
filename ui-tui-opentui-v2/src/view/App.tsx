@@ -65,7 +65,11 @@ export function App(props: AppProps) {
 
   return (
     <box style={{ flexDirection: 'column', flexGrow: 1, paddingTop: 1, paddingLeft: 1, paddingRight: 1 }}>
-      <Header store={props.store} />
+      {/* a bottom rule under the header bookends the transcript with the status
+          bar's top rule — frames the chrome as intentional (item 8). */}
+      <box border={['bottom']} borderColor={theme().color.border} style={{ flexShrink: 0 }}>
+        <Header store={props.store} />
+      </box>
       {/* content zone: a full-screen overlay (pager / agents dashboard) OR the transcript + input zone */}
       <Switch
         fallback={

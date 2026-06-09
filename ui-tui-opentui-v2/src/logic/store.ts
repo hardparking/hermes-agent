@@ -14,7 +14,7 @@
 import { createStore, produce } from 'solid-js/store'
 
 import type { GatewayEvent, GatewaySkinDecoded } from '../boundary/schema/GatewayEvent.ts'
-import { stripOmittedNote, stripToolEnvelope } from './toolOutput.ts'
+import { stripAnsi, stripOmittedNote, stripToolEnvelope } from './toolOutput.ts'
 import { DEFAULT_THEME, type Theme, themeFromSkin } from './theme.ts'
 
 /** A tool call inside an assistant turn (matched start↔complete by `id`=tool_id). */
@@ -331,9 +331,12 @@ export function createSessionStore() {
 
   /** Push a system line (slash output, errors, notices). */
   function pushSystem(text: string) {
+    // slash/notice text is often ANSI-colored for the Ink TUI; strip codes so
+    // they don't render as literal `[1;38m…` glyphs in the native engine (item 8).
+    const clean = stripAnsi(text)
     setState(
       produce(draft => {
-        draft.messages.push({ role: 'system', text })
+        draft.messages.push({ role: 'system', text: clean })
       })
     )
   }
@@ -359,7 +362,7 @@ export function createSessionStore() {
 
   /** Open the pager overlay (long slash output: /status, /logs, …). */
   function openPager(title: string, text: string) {
-    setState('pager', { title, text })
+    setState('pager', { title, text: stripAnsi(text) })
   }
 
   /** Close the pager overlay. */
