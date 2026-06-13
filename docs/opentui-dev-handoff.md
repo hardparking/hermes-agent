@@ -104,11 +104,15 @@ catalogs hydrated at boot**. Ranked next levers:
 - Don't push/PR without the standing OK; don't commit `.plans/` scratch unless asked.
 
 ## Suggested skills
+(All available from the Hermes TUI agent too — this is the dogfooding surface. Curated to the load-bearing set, not the full ~40-skill catalog.)
 - `opentui-tui-engineering` — the workflow/architecture/pitfalls layer for `ui-opentui/` (just updated).
 - `hermes-tui-architecture` — the Hermes-specific TUI facts (launch pipeline, both engines; just updated).
 - `opentui` — the offline renderable-API doc set; mandatory `skill_view` before any view/renderable code.
 - `subagent-driven-development` — the process spine for parallel/heavy work.
-- `tmux-pane-screenshot` — real colored frames for live visual verification.
+- `tmux-pane-screenshot` — real colored PNG of a tmux pane for visual verification (ported
+  into hermes skills 2026-06-13). Use: `bash ~/.hermes/skills/software-development/
+  tmux-pane-screenshot/scripts/tshot.sh <session:win.pane> out.png 2`, then Read the PNG.
+  `freeze` (~/go/bin) + the resvg rasterizer are shared/system-wide — works as-is.
 - `effect-ts` — for the Effect-at-boundary entry/lifecycle code.
 - `superpowers:brainstorming` — before committing to a memory-architecture design (e.g. W1's store split).
 - `systematic-debugging` — if a gate fails; root-cause before patching.
