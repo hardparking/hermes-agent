@@ -22,6 +22,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check installer source changes
+        uses: dorny/paths-filter@de90cc6fb38fc0963be72b67af2fb585800145a6 # v3.0.2
+        id: changes
+        with:
+          filters: |
+            installer:
+              - 'package-lock.json'
+              - 'apps/bootstrap-installer/**'
+
+      - name: Restore installer build cache
+        uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a986c91a # v4.2.0
+        id: installer-cache
+        with:
+          path: |
+            apps/bootstrap-installer/src-tauri/target/release/Hermes.exe
+            apps/bootstrap-installer/src-tauri/target/release/bundle/**/*.exe
+          key: hermes-installer-${{ runner.os }}-${{ hashFiles('package-lock.json', 'apps/bootstrap-installer/**', '!apps/bootstrap-installer/src-tauri/target/**') }}
+          restore-keys: hermes-installer-${{ runner.os }}-
+
+      - name: Determine if installer needs rebuild
+        id: build-needed
+        shell: pwsh
+        run: |
+          $needed = 'false'
+          if ('${{ steps.changes.outputs.installer }}' -eq 'true' -or '${{ steps.installer-cache.outputs.cache-hit }}' -ne 'true') {
+            $needed = 'true'
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "needed=$needed"
+          Write-Host "installer-changed=$('${{ steps.changes.outputs.installer }}') cache-hit=$('${{ steps.installer-cache.outputs.cache-hit }}') build-needed=$needed"
+
       - name: Install AutoHotkey v2
         shell: pwsh
         run: |
@@ -37,24 +67,29 @@ jobs:
           echo $wingetLinks | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Setup Node.js
+        if: steps.build-needed.outputs.needed == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
 
       - name: Setup Rust
+        if: steps.build-needed.outputs.needed == 'true'
         uses: dtolnay/rust-toolchain@1.96.0 # stable
 
       - name: Install npm dependencies
+        if: steps.build-needed.outputs.needed == 'true'
         run: npm ci
 
       - name: Cache Rust targets
+        if: steps.build-needed.outputs.needed == 'true'
         uses: Swatinem/rust-cache@c106961feec855ef5a58494c5a2a31c9d80429a9
         with:
           workspaces: apps/bootstrap-installer/src-tauri
 
       # ── Build the bootstrap installer (Tauri) ──────────────────────
       - name: Build installer
+        if: steps.build-needed.outputs.needed == 'true'
         run: npm run tauri:build
         working-directory: apps/bootstrap-installer
         timeout-minutes: 10
@@ -158,7 +193,7 @@ jobs:
           '@
           $ahk | Out-File -Encoding utf8 "capture-button.ahk"
 
-          $ahkProc = Start-Process -FilePath "$env:RUNNER_TEMP\AutoHotkey64.exe" `
+          $ahkProc = Start-Process AutoHotkey64
             -ArgumentList '"capture-button.ahk"' -PassThru -NoNewWindow `
             -RedirectStandardOutput ahk-stdout.log -RedirectStandardError ahk-stderr.log
 
