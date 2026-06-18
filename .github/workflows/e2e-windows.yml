@@ -198,7 +198,7 @@ jobs:
             $proc.Id | Out-File installer.pid
 
             $ahkProc = Start-Process -FilePath ".\test-bins\autohotkey\AutoHotkey64.exe" `
-              -ArgumentList "$env:INSTALL_DIR\e2e\windows\install-hermes-desktop.ahk" -PassThru -NoNewWindow `
+              -ArgumentList "$env:INSTALL_DIR\e2e\windows\install-hermes-desktop.ahk", "$PWD\ahk.log" -PassThru -NoNewWindow `
               -RedirectStandardOutput ahk-stdout.log -RedirectStandardError ahk-stderr.log
 
             # Wait for AHK helper to finish
@@ -272,7 +272,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $logPath = 'ahk.log'
+          $logPath = Join-Path $PWD 'ahk.log'
           $x = $y = $w = $h = $null
           if (Test-Path $logPath) {
             $line = Get-Content $logPath -Raw | Select-String -Pattern 'Window found at x=(\d+) y=(\d+) w=(\d+) h=(\d+)' -AllMatches | Select-Object -Last 1

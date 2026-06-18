@@ -1,6 +1,8 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 
+logPath := A_Args.Length >= 1 ? A_Args[1] : "ahk.log"
+
 ; enable click animation ;;;;;;;;;;;
 ~LButton::{
     MouseGetPos(&x, &y)
@@ -32,7 +34,7 @@ winTitle := "Hermes"
 try {
     WinWait(winTitle, , 30)
 } catch {
-    FileAppend("ERROR: Hermes installer window did not appear within 30s`n", "ahk.log")
+    FileAppend("ERROR: Hermes installer window did not appear within 30s`n", logPath)
     ExitApp(1)
 }
 ToolTip("Hermes window appeared. Sleeping for a few seconds.....")
@@ -40,7 +42,7 @@ ToolTip("Hermes window appeared. Sleeping for a few seconds.....")
 Sleep(10000)
 
 WinGetPos(&x, &y, &w, &h, winTitle)
-FileAppend(Format("Window found at x={1} y={2} w={3} h={4}`n", x, y, w, h), "ahk.log")
+FileAppend(Format("Window found at x={1} y={2} w={3} h={4}`n", x, y, w, h), logPath)
 ToolTip("Clicking install")
 
 ; click install
