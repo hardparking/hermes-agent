@@ -1,17 +1,14 @@
 """Runtime smoke test for Docker config-schema migration on boot.
 
-Replaces the old text-assertion test that grepped stage2-hook.sh for
-the docker_config_migrate.py invocation. This test builds the real
-image and verifies the actual runtime behavior: a config.yaml present
-in $HERMES_HOME is migrated by docker_config_migrate.py on boot,
-running as the hermes user.
+Build the real image and verify: a config.yaml present in $HERMES_HOME
+is migrated by docker_config_migrate.py on boot, running as the hermes
+user.
 """
 from __future__ import annotations
 
 import subprocess
-import time
 
-from tests.docker.conftest import docker_exec, docker_exec_sh
+from tests.docker.conftest import docker_exec, docker_exec_sh, wait_for_container_ready
 
 
 def test_config_migration_runs_on_boot(
@@ -25,7 +22,7 @@ def test_config_migration_runs_on_boot(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Verify config.yaml exists (should be seeded by stage2 if not present)
     r = docker_exec_sh(
@@ -70,7 +67,7 @@ def test_config_migration_opt_out_env_var_respected(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # config.yaml should still be seeded (seeding is separate from migration)
     r = docker_exec_sh(

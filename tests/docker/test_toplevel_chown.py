@@ -1,8 +1,6 @@
 """Runtime smoke tests for Docker top-level state-file ownership repair.
 
-Replaces the old text-assertion tests that extracted the chown for-loop
-from stage2-hook.sh and ran it in a sandbox. These tests build the real
-image and verify the actual runtime behavior:
+Build the real image and verify the actual runtime behavior:
 
   1. Root-owned top-level state files (auth.json, state.db, gateway.lock,
      gateway_state.json) are chowned to hermes on boot
@@ -12,9 +10,8 @@ image and verify the actual runtime behavior:
 from __future__ import annotations
 
 import subprocess
-import time
 
-from tests.docker.conftest import docker_exec, docker_exec_sh
+from tests.docker.conftest import docker_exec, docker_exec_sh, wait_for_container_ready
 
 
 # The files the stage2 hook should repair (mirrors the allowlist in
@@ -31,7 +28,7 @@ def test_root_owned_state_files_repaired_on_boot(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Create root-owned state files to simulate docker exec (root) writes
     for f in ALLOWLISTED_FILES:
@@ -54,7 +51,7 @@ def test_root_owned_state_files_repaired_on_boot(
         ["docker", "restart", container_name],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Verify files are now hermes-owned
     r = docker_exec_sh(
@@ -79,7 +76,7 @@ def test_non_allowlisted_host_file_not_touched(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Create a non-allowlisted file as root
     docker_exec(
@@ -97,7 +94,7 @@ def test_non_allowlisted_host_file_not_touched(
         ["docker", "restart", container_name],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # The file must STILL be root-owned (not touched by stage2)
     r = docker_exec_sh(

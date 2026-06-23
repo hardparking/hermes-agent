@@ -1,8 +1,6 @@
 """Runtime smoke tests for Docker --user flag guard.
 
-Replaces the old text-assertion tests that extracted the guard block
-from stage2-hook.sh and main-wrapper.sh and ran it in a sandbox. These
-tests build the real image and verify the actual runtime behavior:
+Build the real image and verify the actual runtime behavior:
 
   1. docker run --user <arbitrary-uid> is rejected with actionable guidance
   2. Root start (default) works fine

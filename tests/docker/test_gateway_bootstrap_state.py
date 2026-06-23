@@ -1,8 +1,6 @@
 """Runtime smoke tests for Docker gateway_state.json bootstrap seeding.
 
-Replaces the old text-assertion tests that extracted and ran the seed
-block from stage2-hook.sh in a sandbox. These tests build the real image
-and verify the actual runtime behavior:
+Build the real image and verify the actual runtime behavior:
 
   1. HERMES_GATEWAY_BOOTSTRAP_STATE=running on a fresh volume seeds
      gateway_state.json with running state
@@ -14,9 +12,8 @@ from __future__ import annotations
 
 import json
 import subprocess
-import time
 
-from tests.docker.conftest import docker_exec, docker_exec_sh
+from tests.docker.conftest import docker_exec, docker_exec_sh, wait_for_container_ready
 
 
 def _start_container(
@@ -28,7 +25,7 @@ def _start_container(
         args.extend(["-e", e])
     args.extend([built_image, "sleep", "infinity"])
     subprocess.run(args, check=True, capture_output=True, timeout=60)
-    time.sleep(5)
+    wait_for_container_ready(name)
     return name
 
 
@@ -97,7 +94,7 @@ def test_does_not_clobber_existing_state(
     # start and write its own state, but the stage2 [ ! -f ] guard runs
     # during cont-init (before any service starts), so the file must
     # still be our "stopped" state at this point.
-    time.sleep(3)
+    wait_for_container_ready(container_name)
     r = docker_exec_sh(
         container_name, "cat /opt/data/gateway_state.json", timeout=10,
     )

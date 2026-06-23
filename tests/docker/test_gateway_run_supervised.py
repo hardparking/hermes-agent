@@ -26,12 +26,8 @@ import time
 from tests.docker.conftest import docker_exec_sh
 
 
-def _sh(container: str, command: str, timeout: int = 30):
-    return docker_exec_sh(container, command, timeout=timeout)
-
-
 def _svstat(container: str, slot: str = "gateway-default") -> str:
-    r = _sh(container, f"/command/s6-svstat /run/service/{slot}")
+    r = docker_exec_sh(container, f"/command/s6-svstat /run/service/{slot}")
     return r.stdout if r.returncode == 0 else ""
 
 
@@ -98,7 +94,7 @@ def test_gateway_run_redirects_to_supervised(
     # The CMD process (PID under /init that the wrapper exec'd into)
     # should be sleeping, not the gateway. We grep `ps` for the
     # `sleep infinity` heartbeat.
-    r = _sh(container_name, "ps -eo pid,cmd | grep -v grep | grep 'sleep infinity'")
+    r = docker_exec_sh(container_name, "ps -eo pid,cmd | grep -v grep | grep 'sleep infinity'")
     assert r.returncode == 0 and "sleep infinity" in r.stdout, (
         f"expected `sleep infinity` heartbeat process; got ps:\n{r.stdout}\n"
         f"stderr: {r.stderr}"
@@ -175,7 +171,7 @@ def test_gateway_run_no_supervise_flag_preserves_legacy_behavior(
     if status == "running":
         # Gateway running in foreground — the CMD process should be
         # the gateway itself, NOT a sleep-infinity heartbeat.
-        r = _sh(
+        r = docker_exec_sh(
             container_name,
             "ps -eo pid,ppid,cmd | grep -v grep | awk '/main-wrapper.sh|rc.init top/ { wrapper_pid=$1 } "
             "$3==\"sleep\" && $4==\"infinity\" && $2==wrapper_pid { c++ } END { print c+0 }'",
@@ -186,7 +182,7 @@ def test_gateway_run_no_supervise_flag_preserves_legacy_behavior(
             f"--no-supervise: expected NO `sleep infinity` parented to "
             f"the CMD wrapper (foreground gateway should be the CMD), "
             f"found {redirected_sleeps}. "
-            f"ps:\n{_sh(container_name, 'ps -eo pid,ppid,cmd').stdout}"
+            f"ps:\n{docker_exec_sh(container_name, 'ps -eo pid,ppid,cmd').stdout}"
         )
 
         # The gateway-default s6 slot exists (the cont-init.d
@@ -271,14 +267,14 @@ def test_supervised_gateway_does_not_recurse(
     # recursion guard fails, s6 would respawn fresh `gateway run`
     # processes on every cycle, leaving multiple Python-process
     # descendants under the gateway-default supervise tree.
-    r = _sh(container_name, "ps -eo pid,cmd | grep -v grep | grep -E 'python.*hermes.*gateway run' | wc -l")
+    r = docker_exec_sh(container_name, "ps -eo pid,cmd | grep -v grep | grep -E 'python.*hermes.*gateway run' | wc -l")
     assert r.returncode == 0
     n = int(r.stdout.strip() or 0)
     assert n <= 1, (
         f"expected at most one supervised python `hermes gateway run` "
         f"process (the legitimately-supervised gateway); found {n}. "
         f"Recursion guard may have failed. "
-        f"ps:\n{_sh(container_name, 'ps -eo pid,ppid,cmd').stdout}"
+        f"ps:\n{docker_exec_sh(container_name, 'ps -eo pid,ppid,cmd').stdout}"
     )
 
     # Stronger positive assertion: there should be exactly one
@@ -286,7 +282,7 @@ def test_supervised_gateway_does_not_recurse(
     # CMD process (PID 17 typically). The static `main-hermes`
     # service has its own `sleep infinity` child; THAT one is fine
     # and unrelated to our redirect.
-    r = _sh(
+    r = docker_exec_sh(
         container_name,
         # Find PID of the CMD process (main-wrapper.sh or its sh
         # parent), then count `sleep infinity` children.
@@ -298,7 +294,7 @@ def test_supervised_gateway_does_not_recurse(
     assert redirected == 1, (
         f"expected exactly one `sleep infinity` parented to the CMD "
         f"wrapper (the redirect heartbeat); found {redirected}. "
-        f"ps:\n{_sh(container_name, 'ps -eo pid,ppid,cmd').stdout}"
+        f"ps:\n{docker_exec_sh(container_name, 'ps -eo pid,ppid,cmd').stdout}"
     )
 
 
@@ -377,14 +373,14 @@ def test_supervised_gateway_stdout_reaches_docker_logs(
         "This means the `1` action directive in _render_log_run isn't "
         "forwarding stdout to /init. "
         f"docker logs (last 2000 chars):\n{combined[-2000:]}\n"
-        f"file contents:\n{_sh(container_name, 'cat /opt/data/logs/gateways/default/current').stdout}"
+        f"file contents:\n{docker_exec_sh(container_name, 'cat /opt/data/logs/gateways/default/current').stdout}"
     )
 
     # Cross-check: the same banner must also be in the rotated log
     # file (we kept the file destination, just added stdout). The
     # file version has s6-log's ISO 8601 timestamp prefix; the
     # docker logs version is raw.
-    file_contents = _sh(
+    file_contents = docker_exec_sh(
         container_name, "cat /opt/data/logs/gateways/default/current",
     ).stdout
     assert "⚕" in file_contents or "Hermes Gateway Starting" in file_contents, (

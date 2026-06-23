@@ -1,8 +1,6 @@
 """Runtime smoke tests for Docker HOME overrides and script behavior.
 
-Replaces the old text-assertion tests that grepped main-wrapper.sh,
-dashboard/run, and stage2-hook.sh for string patterns. These tests
-build the real image and verify the actual runtime behavior:
+Build the real image and verify the actual runtime behavior:
 
   1. main-wrapper preserves the Docker ``-w`` working directory
   2. dashboard service resets HOME to /opt/data before privilege drop
@@ -12,9 +10,8 @@ build the real image and verify the actual runtime behavior:
 from __future__ import annotations
 
 import subprocess
-import time
 
-from tests.docker.conftest import docker_exec, docker_exec_sh
+from tests.docker.conftest import docker_exec, docker_exec_sh, wait_for_container_ready
 
 
 def test_main_wrapper_preserves_docker_workdir(
@@ -68,7 +65,7 @@ def test_dashboard_service_resets_home(
         check=True, capture_output=True, timeout=60,
     )
     # Give s6 + dashboard service time to start.
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Check if the dashboard process is running and inspect its HOME.
     r = docker_exec_sh(
@@ -98,9 +95,8 @@ def test_dashboard_does_not_auto_insecure_from_host(
     """The dashboard MUST NOT auto-add ``--insecure`` based on
     HERMES_DASHBOARD_HOST. The auth gate is the authority now.
 
-    Regression: the old host-derived ``--insecure`` case-statement
-    disabled the OAuth auth gate on every non-loopback bind, exposing
-    every wildcard-subdomain agent dashboard publicly (early 2026).
+    The auth gate is the authority on whether non-loopback binds are
+    safe; ``--insecure`` must never be auto-derived from the bind host.
 
     We start the container with a non-loopback bind host and verify
     the dashboard process does NOT receive ``--insecure`` in its
@@ -115,7 +111,7 @@ def test_dashboard_does_not_auto_insecure_from_host(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Check the dashboard process command line for --insecure.
     r = docker_exec_sh(
@@ -149,7 +145,7 @@ def test_stage2_repairs_profiles_and_cron_ownership(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Create root-owned files in profiles/ and cron/ to simulate
     # docker exec (root) writes.
@@ -183,7 +179,7 @@ def test_stage2_repairs_profiles_and_cron_ownership(
         check=True, capture_output=True, timeout=60,
     )
     # Wait for stage2 to complete.
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Verify files are now owned by hermes.
     r = docker_exec_sh(

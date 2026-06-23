@@ -1,7 +1,6 @@
 """Runtime smoke tests for Docker immutable install tree and install-method stamp.
 
-Replaces the old text-assertion tests that grepped stage2-hook.sh for
-string patterns. These tests build the real image and verify at runtime:
+Build the real image and verify at runtime:
 
   1. /opt/hermes is not writable by the hermes user (immutable install tree)
   2. PYTHONDONTWRITEBYTECODE and HERMES_DISABLE_LAZY_INSTALLS are set
@@ -12,9 +11,8 @@ string patterns. These tests build the real image and verify at runtime:
 from __future__ import annotations
 
 import subprocess
-import time
 
-from tests.docker.conftest import docker_exec, docker_exec_sh
+from tests.docker.conftest import docker_exec, docker_exec_sh, wait_for_container_ready
 
 
 def test_install_tree_not_writable_by_hermes(
@@ -31,7 +29,7 @@ def test_install_tree_not_writable_by_hermes(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(3)
+    wait_for_container_ready(container_name)
 
     r = docker_exec_sh(
         container_name,
@@ -68,7 +66,7 @@ def test_hermes_disable_lazy_installs_and_dont_write_bytecode(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(3)
+    wait_for_container_ready(container_name)
 
     r = docker_exec_sh(
         container_name,
@@ -93,7 +91,7 @@ def test_install_method_stamp_is_code_scoped(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(3)
+    wait_for_container_ready(container_name)
 
     # Code-scoped stamp must exist and say "docker"
     r = docker_exec_sh(
@@ -131,7 +129,7 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(3)
+    wait_for_container_ready(container_name)
 
     # Write a stale 'docker' stamp as root
     docker_exec(
@@ -148,7 +146,7 @@ def test_stale_docker_stamp_in_home_is_healed_on_boot(
         ["docker", "restart", container_name],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # The stale stamp must be gone
     r = docker_exec_sh(

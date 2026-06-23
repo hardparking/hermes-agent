@@ -8,9 +8,6 @@ Override the image with ``HERMES_TEST_IMAGE`` env var to point at a pre-built
 image (faster local iteration); otherwise the ``built_image`` fixture builds
 the repo's Dockerfile once per session.
 
-Docker tests need longer timeouts than the suite default (30s), so every
-test under this directory is granted a 180s default via
-``pytest.mark.timeout`` applied at collection time.
 """
 from __future__ import annotations
 
@@ -43,11 +40,9 @@ def pytest_collection_modifyitems(config, items):  # noqa: D401 - pytest hook
     skip_docker = pytest.mark.skip(
         reason="Docker not available or daemon not running",
     )
-    extend_timeout = pytest.mark.timeout(180)
     for item in items:
         if "tests/docker/" not in str(item.fspath).replace(os.sep, "/"):
             continue
-        item.add_marker(extend_timeout)
         if not docker_ok:
             item.add_marker(skip_docker)
 
@@ -136,4 +131,41 @@ def docker_exec_sh(
     """Run ``sh -c <command>`` inside the container as ``user``."""
     return docker_exec(
         container, "sh", "-c", command, user=user, timeout=timeout,
+    )
+
+
+def wait_for_container_ready(
+    container: str,
+    *,
+    deadline_s: float = 30.0,
+    interval_s: float = 0.25,
+) -> None:
+    """Poll until the container has finished s6 cont-init (stage2 + reconcile).
+
+    The readiness signal is ``profile=default`` appearing in
+    ``/opt/data/logs/container-boot.log``, which the 02-reconcile-profiles
+    cont-init script writes on every boot. That log entry fires AFTER
+    stage2-hook.sh completes, so by the time it appears the full
+    cont-init chain (UID remap, chown, config seeding, skills sync,
+    browser discovery, config migration) has run.
+
+    Raises ``TimeoutError`` if the container never becomes ready — much
+    better than a fixed ``time.sleep()`` that either wastes time on fast
+    machines or flakes on slow ones.
+    """
+    import time as _time
+
+    end = _time.monotonic() + deadline_s
+    while _time.monotonic() < end:
+        r = docker_exec(
+            container,
+            "sh", "-c",
+            "cat /opt/data/logs/container-boot.log 2>/dev/null",
+            timeout=5,
+        )
+        if r.returncode == 0 and "profile=default" in r.stdout:
+            return
+        _time.sleep(interval_s)
+    raise TimeoutError(
+        f"container {container} did not finish cont-init within {deadline_s}s"
     )

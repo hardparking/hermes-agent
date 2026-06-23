@@ -1,8 +1,6 @@
 """Runtime smoke tests for Docker PUID/PGID and UID/GID remap.
 
-Replaces the old text-assertion tests that extracted shell blocks from
-stage2-hook.sh and ran them in sandboxes. These tests build the real
-image and verify the actual runtime behavior:
+Build the real image and verify the actual runtime behavior:
 
   1. PUID/PGID env vars remap the hermes user UID/GID at boot
   2. HERMES_UID/HERMES_GID take precedence over PUID/PGID aliases
@@ -13,9 +11,8 @@ image and verify the actual runtime behavior:
 from __future__ import annotations
 
 import subprocess
-import time
 
-from tests.docker.conftest import docker_exec_sh
+from tests.docker.conftest import docker_exec_sh, wait_for_container_ready
 
 
 def test_puid_pgid_remaps_hermes_user(
@@ -29,7 +26,7 @@ def test_puid_pgid_remaps_hermes_user(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     r = docker_exec_sh(
         container_name,
@@ -63,7 +60,7 @@ def test_hermes_uid_gid_take_precedence_over_aliases(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     r = docker_exec_sh(container_name, "id -u hermes", timeout=10)
     assert r.stdout.strip() == "2000", (
@@ -87,7 +84,7 @@ def test_nas_low_uid_accepted(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     r = docker_exec_sh(container_name, "id -u hermes", timeout=10)
     assert r.stdout.strip() == "99", (
@@ -111,7 +108,7 @@ def test_remap_enables_data_volume_writes(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     r = docker_exec_sh(
         container_name,

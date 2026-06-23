@@ -1,10 +1,8 @@
 """Runtime smoke test for Docker image license-file presence.
 
-Replaces the old text-assertion test that grepped .dockerignore for
-the LICENSE filename. This test builds the real image and verifies the
-LICENSE file is actually present inside the container, which is the
-behavioral outcome the old test was trying to guard (PEP 639
-license-files metadata must resolve inside the Docker image).
+Build the real image and verify the LICENSE file is present inside the
+container (PEP 639 license-files metadata must resolve inside the
+Docker image).
 """
 from __future__ import annotations
 
@@ -15,9 +13,7 @@ def test_docker_image_contains_license_file(built_image: str) -> None:
     """The LICENSE file must be present inside the built Docker image.
 
     PEP 639 license-files metadata references LICENSE, and the Docker
-    build context must not exclude it. The old test checked .dockerignore
-    text; this test verifies the actual runtime outcome: the file exists
-    at /opt/hermes/LICENSE inside the image.
+    build context must not exclude it.
     """
     r = subprocess.run(
         ["docker", "run", "--rm", "--entrypoint", "test",

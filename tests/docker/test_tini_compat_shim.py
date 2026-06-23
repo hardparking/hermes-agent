@@ -1,7 +1,6 @@
 """Runtime smoke test for the Docker tini compatibility shim (#34192).
 
-Replaces the old text-assertion tests that grepped the Dockerfile for
-string patterns. These tests build the real image and verify:
+Build the real image and verify:
 
   1. /usr/bin/tini exists and is a symlink to /init (the compat shim
      for orchestration templates that still reference /usr/bin/tini)

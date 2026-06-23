@@ -1,8 +1,6 @@
 """Runtime smoke test for Docker $HERMES_HOME/logs/gateways seeding.
 
-Replaces the old text-assertion test that grepped stage2-hook.sh for
-the mkdir -p seed block. This test builds the real image and verifies
-the actual runtime outcome: logs/ and logs/gateways/ exist and are
+Build the real image and verify logs/ and logs/gateways/ exist and are
 owned by the hermes user after container boot.
 
 Regression guard for #45258: if the first gateway log service runs in
@@ -13,9 +11,8 @@ s6-log crash-loops on mkdir: Permission denied.
 from __future__ import annotations
 
 import subprocess
-import time
 
-from tests.docker.conftest import docker_exec_sh
+from tests.docker.conftest import docker_exec_sh, wait_for_container_ready
 
 
 def test_logs_gateways_seeded_and_hermes_owned(
@@ -27,7 +24,7 @@ def test_logs_gateways_seeded_and_hermes_owned(
          built_image, "sleep", "infinity"],
         check=True, capture_output=True, timeout=60,
     )
-    time.sleep(5)
+    wait_for_container_ready(container_name)
 
     # Both directories must exist
     r = docker_exec_sh(
