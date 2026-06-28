@@ -1427,6 +1427,17 @@ def create_openai_client(agent, client_kwargs: dict, *, reason: str, shared: boo
     client_kwargs = dict(client_kwargs)
     _validate_proxy_env_urls()
     _validate_base_url(client_kwargs.get("base_url"))
+    if agent.provider == "claude-cli" or str(client_kwargs.get("base_url", "")).startswith("cli://claude"):
+        from agent.claude_cli_client import ClaudeCliClient
+
+        client = ClaudeCliClient(**client_kwargs)
+        _ra().logger.info(
+            "Claude CLI client created (%s, shared=%s) %s",
+            reason,
+            shared,
+            agent._client_log_context(),
+        )
+        return client
     if agent.provider == "copilot-acp" or str(client_kwargs.get("base_url", "")).startswith("acp://copilot"):
         from agent.copilot_acp_client import CopilotACPClient
 

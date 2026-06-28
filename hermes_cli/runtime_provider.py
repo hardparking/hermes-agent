@@ -1651,6 +1651,16 @@ def resolve_runtime_provider(
             "requested_provider": requested_provider,
         }
 
+    if provider == "claude-cli":
+        return {
+            "provider": "claude-cli",
+            "api_mode": "chat_completions",
+            "base_url": "cli://claude",
+            "api_key": "claude-cli",
+            "source": "external-process",
+            "requested_provider": requested_provider,
+        }
+
     # Anthropic (native Messages API)
     if provider == "anthropic":
         # Allow base URL override from config.yaml model.base_url, but only
