@@ -6175,6 +6175,43 @@ def get_external_process_provider_status(provider_id: str) -> Dict[str, Any]:
     if not pconfig or pconfig.auth_type != "external_process":
         return {"configured": False}
 
+    # claude-cli routes through the local `claude` binary, which carries its own
+    # auth (OAuth/Keychain/ANTHROPIC_API_KEY). Probe the binary and the Claude
+    # Code credentials directly rather than reusing the Copilot resolution below.
+    if provider_id == "claude-cli":
+        command = os.getenv("HERMES_CLAUDE_CLI_COMMAND", "").strip() or "claude"
+        raw_args = os.getenv("HERMES_CLAUDE_CLI_ARGS", "").strip()
+        args = shlex.split(raw_args) if raw_args else []
+        base_url = pconfig.inference_base_url
+        resolved_command = shutil.which(command) if command else None
+        authed = False
+        try:
+            from agent.anthropic_adapter import (
+                read_claude_code_credentials,
+                is_claude_code_token_valid,
+            )
+
+            creds = read_claude_code_credentials()
+            authed = bool(
+                creds
+                and (is_claude_code_token_valid(creds) or creds.get("refreshToken"))
+            )
+        except Exception:
+            authed = False
+        # An explicit ANTHROPIC_API_KEY also authenticates the CLI.
+        if not authed and os.getenv("ANTHROPIC_API_KEY", "").strip():
+            authed = True
+        return {
+            "configured": bool(resolved_command),
+            "provider": provider_id,
+            "name": pconfig.name,
+            "command": command,
+            "args": args,
+            "resolved_command": resolved_command,
+            "base_url": base_url,
+            "logged_in": bool(resolved_command) and authed,
+        }
+
     command = (
         os.getenv("HERMES_COPILOT_ACP_COMMAND", "").strip()
         or os.getenv("COPILOT_CLI_PATH", "").strip()
@@ -6216,12 +6253,13 @@ def get_auth_status(provider_id: Optional[str] = None) -> Dict[str, Any]:
         return get_qwen_auth_status()
     if target == "minimax-oauth":
         return get_minimax_oauth_auth_status()
-    if target == "copilot-acp":
-        return get_external_process_provider_status(target)
     if target == "azure-foundry":
         return _get_azure_foundry_auth_status()
-    # API-key providers
     pconfig = PROVIDER_REGISTRY.get(target)
+    # Local-subprocess providers (copilot-acp, claude-cli)
+    if pconfig and pconfig.auth_type == "external_process":
+        return get_external_process_provider_status(target)
+    # API-key providers
     if pconfig and pconfig.auth_type == "api_key":
         return get_api_key_provider_status(target)
     # AWS SDK providers (Bedrock) — check via boto3 credential chain
