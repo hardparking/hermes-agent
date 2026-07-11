@@ -1812,6 +1812,31 @@ def list_authenticated_providers(
                     has_creds = True
             except Exception as exc:
                 logger.debug("Anthropic external creds check failed: %s", exc)
+        # claude-cli delegates auth to the local `claude` binary — the picker
+        # should offer it whenever the binary exists and Claude Code has a
+        # login (keychain/credentials file), a CLAUDE_CODE_OAUTH_TOKEN (headless
+        # gateways), or an ANTHROPIC_API_KEY the CLI would accept.
+        if not has_creds and hermes_slug == "claude-cli":
+            try:
+                import shutil as _shutil
+
+                _cli_cmd = (
+                    os.environ.get("HERMES_CLAUDE_CLI_COMMAND", "").strip()
+                    or "claude"
+                )
+                if _shutil.which(_cli_cmd):
+                    if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "").strip() or \
+                       os.environ.get("ANTHROPIC_API_KEY", "").strip():
+                        has_creds = True
+                    else:
+                        from agent.anthropic_adapter import (
+                            read_claude_code_credentials as _read_cc,
+                        )
+                        _cc = _read_cc()
+                        if _cc and (_cc.get("accessToken") or _cc.get("refreshToken")):
+                            has_creds = True
+            except Exception as exc:
+                logger.debug("claude-cli creds check failed: %s", exc)
         if not has_creds:
             continue
 

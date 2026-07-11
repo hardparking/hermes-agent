@@ -34,8 +34,13 @@ class ClaudeCliProfile(ProviderProfile):
         base_url: str | None = None,
         timeout: float = 8.0,
     ) -> list[str] | None:
+        # Keep in sync with _PROVIDER_MODELS["claude-cli"] in
+        # hermes_cli/models.py — that static catalog is what /model and the
+        # picker read; this hook serves the providers-registry consumers.
         return [
+            "claude-fable-5",
             "claude-opus-4-8",
+            "claude-sonnet-5",
             "claude-sonnet-4-6",
             "claude-haiku-4-5-20251001",
         ]
@@ -48,7 +53,7 @@ claude_cli = ClaudeCliProfile(
     env_vars=(),
     base_url=CLAUDE_CLI_MARKER_BASE_URL,
     auth_type="external_process",
-    fallback_models=("claude-opus-4-8", "claude-sonnet-4-6"),
+    fallback_models=("claude-opus-4-8", "claude-sonnet-5", "claude-sonnet-4-6"),
     default_aux_model="claude-haiku-4-5-20251001",
 )
 

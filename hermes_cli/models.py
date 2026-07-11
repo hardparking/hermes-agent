@@ -372,6 +372,19 @@ _PROVIDER_MODELS: dict[str, list[str]] = {
         "claude-sonnet-4-20250514",
         "claude-haiku-4-5-20251001",
     ],
+    # Claude via the local `claude` CLI (subscription/OAuth, no API key).
+    # Listed AFTER anthropic so bare claude-* names keep auto-detecting to
+    # the API provider; claude-cli is reached via `/model claude-cli`,
+    # `--provider claude-cli`, or the picker. Having its own catalog also
+    # keeps `/model <claude-model>` from hopping OFF claude-cli to anthropic
+    # when claude-cli is the current provider.
+    "claude-cli": [
+        "claude-fable-5",
+        "claude-opus-4-8",
+        "claude-sonnet-5",
+        "claude-sonnet-4-6",
+        "claude-haiku-4-5-20251001",
+    ],
     "deepseek": [
         "deepseek-v4-pro",
         "deepseek-v4-flash",
@@ -1060,6 +1073,7 @@ CANONICAL_PROVIDERS: list[ProviderEntry] = [
     ProviderEntry("nvidia",         "NVIDIA NIM",               "NVIDIA NIM (Nemotron models via build.nvidia.com or local NIM)"),
     ProviderEntry("copilot",        "GitHub Copilot",           "GitHub Copilot (Uses GITHUB_TOKEN or gh auth token)"),
     ProviderEntry("copilot-acp",    "GitHub Copilot ACP",       "GitHub Copilot ACP (Spawns copilot --acp --stdio)"),
+    ProviderEntry("claude-cli",     "Claude Code CLI",          "Claude Code CLI (Local `claude` binary via subscription/OAuth; persistent stream-json runtime)"),
     ProviderEntry("huggingface",    "Hugging Face",             "Hugging Face Inference Providers"),
     ProviderEntry("gemini",         "Google AI Studio",         "Google AI Studio (Native Gemini API)"),
     ProviderEntry("vertex",         "Google Vertex AI",         "Google Vertex AI (Gemini via GCP; OAuth2 service account or ADC, GCP billing/quotas)"),
@@ -1211,6 +1225,9 @@ def group_providers(slugs):
 
 
 _PROVIDER_ALIASES = {
+    "claude-code": "claude-cli",
+    "claude-code-cli": "claude-cli",
+    "claude-local": "claude-cli",
     "glm": "zai",
     "z-ai": "zai",
     "z.ai": "zai",

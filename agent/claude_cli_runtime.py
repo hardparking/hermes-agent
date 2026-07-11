@@ -312,6 +312,61 @@ def _ensure_claude_cli_session(agent):
     return session
 
 
+# Reseed cap mirrors OpenClaw's default: enough tail context to restore the
+# thread without burning the fresh session's first prompt on ancient history.
+_RESEED_MAX_CHARS = 12_000
+
+
+def _maybe_reseed_input(session, messages: List[Dict[str, Any]], user_message: str) -> str:
+    """When a fresh claude session starts mid-conversation (gateway agent
+    rebuilt after eviction/restart/model switch), Claude Code's internal
+    context is empty but Hermes still holds the transcript. Wrap the first
+    prompt in a conversation-history envelope so the thread continues
+    coherently — OpenClaw's reseed-from-transcript pattern.
+
+    No-op when the session already has a Claude session id (live process or
+    --resume respawn: Claude Code restores its own context)."""
+    if session.session_id is not None:
+        return user_message
+
+    history = [
+        m for m in messages
+        if isinstance(m, dict) and m.get("role") in {"user", "assistant"}
+    ]
+    # The current user message is already appended by run_conversation's
+    # prologue — the envelope carries it separately.
+    if history and history[-1].get("role") == "user":
+        history = history[:-1]
+    if not history:
+        return user_message
+
+    rendered: list[str] = []
+    for m in history:
+        content = m.get("content")
+        if not isinstance(content, str) or not content.strip():
+            continue
+        label = "User" if m.get("role") == "user" else "Assistant"
+        rendered.append(f"{label}: {content.strip()}")
+    if not rendered:
+        return user_message
+
+    transcript = "\n\n".join(rendered)
+    if len(transcript) > _RESEED_MAX_CHARS:
+        transcript = "[...earlier conversation truncated...]\n\n" + transcript[-_RESEED_MAX_CHARS:]
+
+    return (
+        "<conversation_history>\n"
+        "The following is the conversation so far; your runtime was restarted "
+        "and this restores your context. Do not summarize or acknowledge it — "
+        "just continue the conversation naturally.\n\n"
+        f"{transcript}\n"
+        "</conversation_history>\n"
+        "<next_user_message>\n"
+        f"{user_message}\n"
+        "</next_user_message>"
+    )
+
+
 def run_claude_cli_turn(
     agent,
     *,
@@ -331,10 +386,11 @@ def run_claude_cli_turn(
     context internally, so only the new user text is written to the child.
     """
     session = _ensure_claude_cli_session(agent)
+    turn_input = _maybe_reseed_input(session, messages, user_message)
 
     try:
         turn = session.run_turn(
-            user_input=user_message,
+            user_input=turn_input,
             interrupt_check=lambda: bool(agent._interrupt_requested),
         )
     except Exception as exc:
