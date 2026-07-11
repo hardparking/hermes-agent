@@ -1,11 +1,21 @@
 """Claude CLI provider profile.
 
-Routes requests through the local `claude` CLI subprocess instead of the
-Anthropic REST API.  Useful as a fallback when API keys are unavailable or
-when you want to leverage Claude Code's native auth (OAuth / keychain).
+Routes turns through the local `claude` CLI instead of the Anthropic REST
+API — no API key required; uses Claude Code's native auth (OAuth / keychain /
+CLAUDE_CODE_OAUTH_TOKEN).
 
-Set HERMES_CLAUDE_CLI_COMMAND to override the `claude` binary path.
-Set HERMES_CLAUDE_CLI_EFFORT to a fixed effort level (low/medium/high/xhigh/max).
+Default runtime (api_mode "claude_cli"): a persistent `claude` subprocess
+speaking stream-json owns the agentic loop — native Bash/Read/Write/Edit
+tools, internal context and compaction, session resume across respawns —
+while Hermes' extra tools (web search, browser, skills, kanban, …) reach it
+via the hermes-tools MCP server. See agent/claude_cli_runtime.py.
+
+Environment variables:
+  HERMES_CLAUDE_CLI_COMMAND   Path to the claude binary (default: "claude")
+  HERMES_CLAUDE_CLI_EFFORT    Fixed effort level: low/medium/high/xhigh/max
+  HERMES_CLAUDE_CLI_ARGS      Extra CLI args (space-separated)
+  HERMES_CLAUDE_CLI_RUNTIME   "shim" reverts to the legacy one-shot
+                              OpenAI-compat shim (agent/claude_cli_client.py)
 """
 
 from providers import register_provider

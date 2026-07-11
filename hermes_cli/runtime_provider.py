@@ -340,6 +340,11 @@ _VALID_API_MODES = {
     # `model.openai_runtime == "codex_app_server"` AND provider in
     # {"openai", "openai-codex"}. Default is unchanged.
     "codex_app_server",
+    # Persistent `claude` CLI subprocess speaking stream-json — Claude Code
+    # owns the agentic loop, Hermes tools reach it via MCP. Default runtime
+    # for the claude-cli provider; HERMES_CLAUDE_CLI_RUNTIME=shim opts back
+    # into the legacy one-shot OpenAI-compat shim.
+    "claude_cli",
 }
 
 
@@ -1847,9 +1852,13 @@ def resolve_runtime_provider(
         }
 
     if provider == "claude-cli":
+        # Default runtime: persistent stream-json `claude` subprocess that
+        # owns the agentic loop (see agent/claude_cli_runtime.py). The legacy
+        # one-shot OpenAI-compat shim remains available as an escape hatch.
+        _claude_runtime = os.getenv("HERMES_CLAUDE_CLI_RUNTIME", "").strip().lower()
         return {
             "provider": "claude-cli",
-            "api_mode": "chat_completions",
+            "api_mode": "chat_completions" if _claude_runtime == "shim" else "claude_cli",
             "base_url": "cli://claude",
             "api_key": "claude-cli",
             "source": "external-process",

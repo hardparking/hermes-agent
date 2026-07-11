@@ -640,6 +640,19 @@ def run_conversation(
             should_review_memory=_should_review_memory,
         )
 
+    # Claude CLI runtime: same shape as the codex app-server path — a
+    # persistent `claude` subprocess owns the loop and Hermes projects its
+    # stream-json events back into `messages`. Default for the claude-cli
+    # provider. See agent/claude_cli_runtime.py.
+    if agent.api_mode == "claude_cli":
+        return agent._run_claude_cli_turn(
+            user_message=user_message,
+            original_user_message=original_user_message,
+            messages=messages,
+            effective_task_id=effective_task_id,
+            should_review_memory=_should_review_memory,
+        )
+
     while (api_call_count < agent.max_iterations and agent.iteration_budget.remaining > 0) or agent._budget_grace_call:
         # Reset per-turn checkpoint dedup so each iteration can take one snapshot
         agent._checkpoint_mgr.new_turn()
