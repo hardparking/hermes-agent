@@ -44,6 +44,7 @@ Spawned by: CodexAppServerSession.ensure_started() when the runtime is
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -154,12 +155,17 @@ def _build_server() -> Any:
         description = spec.get("description") or f"Hermes {name} tool"
         params_schema = spec.get("parameters") or {"type": "object", "properties": {}}
 
-        # FastMCP wants a Python callable. Build a closure that takes the
-        # arguments dict, dispatches via handle_function_call, and returns
-        # the result string. We use add_tool() for full control over the
-        # input schema (FastMCP's @tool() decorator inspects type hints,
-        # which we can't get from a JSON schema at runtime).
-        def _make_handler(tool_name: str):
+        # FastMCP wants a Python callable and derives the tool's input
+        # schema by introspecting that callable's signature — it does NOT
+        # accept a JSON schema directly on this mcp version (add_tool has no
+        # schema parameter). A naive ``def _dispatch(**kwargs)`` therefore
+        # collapses to a single required string param literally named
+        # "kwargs", so every real argument (url, query, ...) is dropped
+        # before it reaches handle_function_call. To preserve Hermes'
+        # authoritative parameter names/docs we synthesize an explicit
+        # signature (one keyword-only param per schema property) and then
+        # overwrite the advertised schema with the full Hermes spec.
+        def _make_handler(tool_name: str, schema: dict) -> Any:
             def _dispatch(**kwargs: Any) -> str:
                 try:
                     return handle_function_call(tool_name, kwargs or {})
@@ -168,21 +174,43 @@ def _build_server() -> Any:
                     return json.dumps({"error": str(exc), "tool": tool_name})
             _dispatch.__name__ = tool_name
             _dispatch.__doc__ = description
+
+            props = (schema or {}).get("properties") or {}
+            required = set((schema or {}).get("required") or [])
+            sig_params = []
+            annotations: dict[str, Any] = {}
+            for pname in props:
+                if not pname.isidentifier():
+                    # Can't express as a Python parameter — fall back to a
+                    # permissive VAR_KEYWORD so the arg still passes through.
+                    return _dispatch
+                is_req = pname in required
+                param = inspect.Parameter(
+                    pname,
+                    inspect.Parameter.KEYWORD_ONLY,
+                    default=inspect.Parameter.empty if is_req else None,
+                    annotation=Any if is_req else Optional[Any],
+                )
+                sig_params.append(param)
+                annotations[pname] = param.annotation
+            _dispatch.__signature__ = inspect.Signature(sig_params)
+            _dispatch.__annotations__ = annotations
             return _dispatch
 
+        mcp.add_tool(
+            _make_handler(name, params_schema),
+            name=name,
+            description=description,
+        )
+        # Advertise Hermes' full JSON schema (types, descriptions, enums)
+        # rather than the minimal one FastMCP infers from the synthesized
+        # Any-typed signature.
         try:
-            mcp.add_tool(
-                _make_handler(name),
-                name=name,
-                description=description,
-                # FastMCP accepts JSON schema directly via the
-                # input_schema parameter on newer versions; older
-                # versions use parameters_schema. Try both for compat.
-            )
-        except TypeError:
-            # Older mcp SDK signature — fall back to decorator-style.
-            handler = _make_handler(name)
-            handler = mcp.tool(name=name, description=description)(handler)
+            registered = mcp._tool_manager.get_tool(name)
+            if registered is not None:
+                registered.parameters = params_schema
+        except Exception:  # pragma: no cover - advertising is best-effort
+            logger.debug("could not override advertised schema for %s", name)
 
         exposed_count += 1
 

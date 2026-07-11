@@ -97,6 +97,70 @@ class TestModuleSurface:
             )
 
 
+class TestSchemaWiring:
+    """Regression tests for the schema/arg-dispatch bug where FastMCP
+    introspected ``def _dispatch(**kwargs)`` and collapsed every tool to a
+    single required string param literally named ``kwargs`` — so real
+    arguments (url, ref, query, ...) never reached handle_function_call.
+    """
+
+    def _build(self):
+        import pytest
+        try:
+            from agent.transports.hermes_tools_mcp_server import _build_server
+        except Exception:  # pragma: no cover
+            pytest.skip("hermes-tools MCP module unavailable")
+        try:
+            return _build_server()
+        except ImportError:
+            pytest.skip("mcp SDK not installed in this environment")
+
+    def test_advertised_schema_uses_real_param_names(self):
+        srv = self._build()
+        tm = srv._tool_manager
+        tool = tm.get_tool("browser_navigate")
+        assert tool is not None, "browser_navigate not registered in this process"
+        props = (tool.parameters or {}).get("properties", {})
+        # The bug produced {"properties": {"kwargs": {...}}}; the real
+        # schema must expose the actual parameter and require it.
+        assert "url" in props, f"expected 'url' param, got {list(props)}"
+        assert "kwargs" not in props, "collapsed **kwargs schema regressed"
+        assert "url" in (tool.parameters.get("required") or [])
+        # Rich schema is preserved, not FastMCP's inferred minimal one.
+        assert props["url"].get("description")
+
+    def test_dispatch_passes_named_args_through(self, monkeypatch):
+        import asyncio
+        import model_tools
+
+        captured = {}
+
+        def fake_dispatch(name, args):
+            captured["name"] = name
+            captured["args"] = args
+            return "{}"
+
+        # _build_server imports handle_function_call from model_tools into
+        # its local scope, so patch it at the source module.
+        monkeypatch.setattr(model_tools, "handle_function_call", fake_dispatch)
+        srv = self._build()
+        tool = srv._tool_manager.get_tool("browser_navigate")
+        assert tool is not None
+        asyncio.run(tool.run({"url": "https://example.com/"}))
+        assert captured["name"] == "browser_navigate"
+        assert captured["args"] == {"url": "https://example.com/"}, (
+            f"named arg dropped before dispatch: {captured.get('args')!r}"
+        )
+
+    def test_zero_arg_tool_has_empty_schema(self):
+        srv = self._build()
+        tool = srv._tool_manager.get_tool("browser_back")
+        if tool is None:  # not registered here — the shape still matters
+            return
+        props = (tool.parameters or {}).get("properties", {})
+        assert "kwargs" not in props
+
+
 class TestMain:
     def test_main_returns_2_when_mcp_unavailable(self, monkeypatch):
         """When the mcp package isn't installed, main() should exit
