@@ -43,6 +43,51 @@ def _resolve_effort() -> str | None:
     return None
 
 
+# Claude Code 2.x --permission-mode values, plus friendlier aliases.
+_PERMISSION_MODES = {"default", "acceptEdits", "bypassPermissions", "plan"}
+_PERMISSION_MODE_ALIASES = {
+    "auto": "bypassPermissions",
+    "yolo": "bypassPermissions",
+    "bypass": "bypassPermissions",
+    "bypasspermissions": "bypassPermissions",
+    "acceptedits": "acceptEdits",
+    "accept-edits": "acceptEdits",
+}
+
+
+def _resolve_permission_mode() -> str:
+    """Pick the --permission-mode for the claude subprocess.
+
+    HERMES_CLAUDE_CLI_PERMISSION_MODE wins when set (headless gateways have no
+    one to answer control_request prompts, so "auto"/"bypassPermissions" is
+    the usual choice there); otherwise Hermes' own approval-bypass state
+    (--yolo, /yolo, approvals.mode: off) maps to bypassPermissions.
+    """
+    raw = os.getenv("HERMES_CLAUDE_CLI_PERMISSION_MODE", "").strip()
+    if raw:
+        mode = _PERMISSION_MODE_ALIASES.get(raw.lower(), raw)
+        if mode in _PERMISSION_MODES:
+            return mode
+        logger.warning(
+            "claude-cli: ignoring invalid HERMES_CLAUDE_CLI_PERMISSION_MODE=%r "
+            "(valid: %s)",
+            raw,
+            ", ".join(sorted(_PERMISSION_MODES)),
+        )
+    try:
+        from tools.approval import is_approval_bypass_active
+
+        if is_approval_bypass_active():
+            return "bypassPermissions"
+    except Exception:
+        logger.debug(
+            "claude-cli: approval-bypass lookup failed; keeping default "
+            "permission mode",
+            exc_info=True,
+        )
+    return "default"
+
+
 def _write_mcp_config(scratch_dir: str | None = None) -> str:
     """Write the per-session MCP config that lets the claude subprocess call
     back into Hermes' tool surface (web search, browser, vision, kanban, …)
@@ -231,18 +276,23 @@ def _record_claude_cli_usage(agent, turn) -> dict[str, Any]:
 
 def _ensure_claude_cli_session(agent):
     """Get or build the per-agent ClaudeCliSession. Rebuilds (carrying the
-    Claude session id forward for --resume) when the model or cwd changed
-    mid-session, e.g. a /model switch."""
+    Claude session id forward for --resume) when the model, cwd, or resolved
+    permission mode changed mid-session, e.g. a /model switch or /yolo."""
     from agent.transports.claude_cli_session import ClaudeCliSession
 
     model = _normalize_model(getattr(agent, "model", None))
     from agent.runtime_cwd import resolve_agent_cwd
 
     cwd = getattr(agent, "session_cwd", None) or str(resolve_agent_cwd())
+    permission_mode = _resolve_permission_mode()
 
     existing = getattr(agent, "_claude_cli_session", None)
     if existing is not None:
-        if existing._model == model and existing._cwd == cwd:
+        if (
+            existing._model == model
+            and existing._cwd == cwd
+            and existing._permission_mode == permission_mode
+        ):
             return existing
         carried_session_id = existing.session_id
         try:
@@ -256,19 +306,6 @@ def _ensure_claude_cli_session(agent):
     command = os.getenv("HERMES_CLAUDE_CLI_COMMAND", "").strip() or "claude"
     raw_extra = os.getenv("HERMES_CLAUDE_CLI_ARGS", "").strip()
     extra_args = shlex.split(raw_extra) if raw_extra else []
-
-    permission_mode = "default"
-    try:
-        from tools.approval import is_approval_bypass_active
-
-        if is_approval_bypass_active():
-            permission_mode = "bypassPermissions"
-    except Exception:
-        logger.debug(
-            "claude-cli: approval-bypass lookup failed; keeping default "
-            "permission mode",
-            exc_info=True,
-        )
 
     def _on_stream_delta(text: str) -> None:
         agent._fire_stream_delta(text)

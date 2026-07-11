@@ -13,6 +13,12 @@ via the hermes-tools MCP server. See agent/claude_cli_runtime.py.
 Environment variables:
   HERMES_CLAUDE_CLI_COMMAND   Path to the claude binary (default: "claude")
   HERMES_CLAUDE_CLI_EFFORT    Fixed effort level: low/medium/high/xhigh/max
+  HERMES_CLAUDE_CLI_PERMISSION_MODE
+                              claude --permission-mode: default / acceptEdits /
+                              bypassPermissions / plan (aliases: auto, yolo,
+                              bypass → bypassPermissions). Unset: "default",
+                              or bypassPermissions when Hermes approval bypass
+                              (--yolo, /yolo, approvals.mode: off) is active.
   HERMES_CLAUDE_CLI_ARGS      Extra CLI args (space-separated)
   HERMES_CLAUDE_CLI_RUNTIME   "shim" reverts to the legacy one-shot
                               OpenAI-compat shim (agent/claude_cli_client.py)
